@@ -1,5 +1,27 @@
 import sharp from "sharp";
 
+// Taille/qualite max des images stockees : suffisant pour un affichage web
+// et un rapport PDF net, tout en gardant les fichiers tres legers en
+// stockage (un JPEG telephone de 4000x3000 a 100% passe generalement de
+// plusieurs Mo a quelques centaines de Ko apres ce traitement).
+const MAX_DIMENSION = 1600;
+const JPEG_QUALITY = 78;
+
+/** Corrige l'orientation EXIF et redimensionne/recompresse une image
+ * uploadee, avant stockage. A appliquer a l'original ET au tampon. */
+export async function normalizeImage(buffer: Buffer): Promise<Buffer> {
+  return sharp(buffer)
+    .rotate()
+    .resize({
+      width: MAX_DIMENSION,
+      height: MAX_DIMENSION,
+      fit: "inside",
+      withoutEnlargement: true,
+    })
+    .jpeg({ quality: JPEG_QUALITY })
+    .toBuffer();
+}
+
 export type CropData = {
   x: number;
   y: number;
@@ -139,11 +161,11 @@ export async function renderStampedImage(
     pipeline = sharp(meta.data).extract({ left, top, width: cropWidth, height: cropHeight });
   }
 
-  const base = await pipeline.jpeg({ quality: 90 }).toBuffer({ resolveWithObject: true });
+  const base = await pipeline.jpeg({ quality: JPEG_QUALITY }).toBuffer({ resolveWithObject: true });
   const { svg } = buildStampSvg(base.info.width, fields);
 
   return sharp(base.data)
     .composite([{ input: svg, gravity: "south" }])
-    .jpeg({ quality: 90 })
+    .jpeg({ quality: JPEG_QUALITY })
     .toBuffer();
 }

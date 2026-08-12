@@ -5,7 +5,7 @@ import { getCurrentUser } from "@/lib/session";
 import { getOwnedProject } from "@/lib/authz";
 import { saveProjectFile } from "@/lib/storage";
 import { reverseGeocode } from "@/lib/geocode";
-import { renderStampedImage } from "@/lib/stamp";
+import { normalizeImage, renderStampedImage } from "@/lib/stamp";
 
 export const runtime = "nodejs";
 
@@ -49,7 +49,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
   }
   const { latitude, longitude, accuracy, capturedAt, note, groupId } = parsed.data;
 
-  const originalBuffer = Buffer.from(await file.arrayBuffer());
+  const originalBuffer = await normalizeImage(Buffer.from(await file.arrayBuffer()));
 
   const geocoded =
     latitude !== undefined && longitude !== undefined

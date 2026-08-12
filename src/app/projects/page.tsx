@@ -3,6 +3,7 @@ import { Camera, FolderOpen, MapPin } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { NewProjectForm } from "@/components/NewProjectForm";
+import { RecompressButton } from "@/components/RecompressButton";
 
 export default async function ProjectsPage() {
   const user = await getCurrentUser();
@@ -16,9 +17,12 @@ export default async function ProjectsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-2 flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-slate-900">Mes projets</h1>
         <NewProjectForm />
+      </div>
+      <div className="mb-6 flex justify-end">
+        <RecompressButton />
       </div>
 
       {projects.length === 0 ? (

@@ -201,9 +201,13 @@ export function RetouchClient({ photo }: { photo: PhotoData }) {
       </div>
 
       {!editingCrop ? (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-black">
+        <div className="flex max-h-[45vh] items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-black">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={stampedUrl} alt={photo.address || photo.projectName} className="w-full" />
+          <img
+            src={stampedUrl}
+            alt={photo.address || photo.projectName}
+            className="max-h-[45vh] w-full object-contain"
+          />
         </div>
       ) : (
         <div className="space-y-3">

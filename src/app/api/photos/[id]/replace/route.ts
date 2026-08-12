@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { getOwnedPhoto } from "@/lib/authz";
 import { overwriteProjectFile } from "@/lib/storage";
-import { renderStampedImage } from "@/lib/stamp";
+import { normalizeImage, renderStampedImage } from "@/lib/stamp";
 
 export const runtime = "nodejs";
 
@@ -28,7 +28,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     return NextResponse.json({ error: "Le fichier doit etre une image" }, { status: 400 });
   }
 
-  const originalBuffer = Buffer.from(await file.arrayBuffer());
+  const originalBuffer = await normalizeImage(Buffer.from(await file.arrayBuffer()));
 
   const stampedBuffer = await renderStampedImage(originalBuffer, {
     title: photo.project.name,

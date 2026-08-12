@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, ExternalLink, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, ExternalLink, MapPinned, X } from "lucide-react";
 
 export type LightboxPhoto = {
   id: string;
@@ -11,6 +11,8 @@ export type LightboxPhoto = {
   address: string | null;
   note: string | null;
   capturedAt: string;
+  latitude: number;
+  longitude: number;
 };
 
 function formatDateTime(iso: string) {
@@ -23,10 +25,12 @@ export function PhotoLightbox({
   photos,
   initialIndex = 0,
   onClose,
+  onEditPosition,
 }: {
   photos: LightboxPhoto[];
   initialIndex?: number;
   onClose: () => void;
+  onEditPosition?: (photo: LightboxPhoto) => void;
 }) {
   const [index, setIndex] = useState(initialIndex);
   const count = photos.length;
@@ -110,13 +114,24 @@ export function PhotoLightbox({
         {current.address && <p className="text-sm text-white/80">{current.address}</p>}
         <p className="text-xs text-white/60">{formatDateTime(current.capturedAt)}</p>
         {current.note && <p className="text-sm italic text-white/80">{current.note}</p>}
-        <Link
-          href={`/photos/${current.id}`}
-          className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-brand-300 hover:underline"
-        >
-          Ouvrir dans l&apos;editeur
-          <ExternalLink className="h-3.5 w-3.5" />
-        </Link>
+        <div className="mt-2 flex flex-wrap items-center gap-4">
+          <Link
+            href={`/photos/${current.id}`}
+            className="inline-flex items-center gap-1 text-sm font-medium text-brand-300 hover:underline"
+          >
+            Ouvrir dans l&apos;editeur
+            <ExternalLink className="h-3.5 w-3.5" />
+          </Link>
+          {onEditPosition && (
+            <button
+              onClick={() => onEditPosition(current)}
+              className="inline-flex items-center gap-1 text-sm font-medium text-brand-300 hover:underline"
+            >
+              Modifier la position
+              <MapPinned className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

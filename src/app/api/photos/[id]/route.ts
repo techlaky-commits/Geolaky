@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/session";
 import { getOwnedPhoto } from "@/lib/authz";
 import { deleteProjectFile, overwriteProjectFile, readProjectFile } from "@/lib/storage";
 import { renderStampedImage, type CropData } from "@/lib/stamp";
+import { reverseGeocode } from "@/lib/geocode";
 
 export const runtime = "nodejs";
 
@@ -26,10 +27,16 @@ const cropSchema = z.object({
   rotation: z.number().default(0),
 });
 
+const positionSchema = z.object({
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+});
+
 const updateSchema = z.object({
   note: z.string().trim().max(1000).nullable().optional(),
   address: z.string().trim().max(400).nullable().optional(),
   crop: cropSchema.nullable().optional(),
+  position: positionSchema.optional(),
 });
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
@@ -44,9 +51,26 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   if (!parsed.success) return NextResponse.json({ error: "Donnees invalides" }, { status: 400 });
 
   const note = parsed.data.note !== undefined ? parsed.data.note : photo.note;
-  const address = parsed.data.address !== undefined ? parsed.data.address : photo.address;
   const crop: CropData | null =
     parsed.data.crop !== undefined ? parsed.data.crop : photo.cropData ? JSON.parse(photo.cropData) : null;
+
+  let latitude = photo.latitude;
+  let longitude = photo.longitude;
+  let accuracy = photo.accuracy;
+  let address = parsed.data.address !== undefined ? parsed.data.address : photo.address;
+  let country = photo.country;
+
+  if (parsed.data.position) {
+    latitude = parsed.data.position.latitude;
+    longitude = parsed.data.position.longitude;
+    accuracy = null; // la precision GPS d'origine ne reflete plus une position corrigee manuellement
+
+    if (parsed.data.address === undefined) {
+      const geocoded = await reverseGeocode(latitude, longitude);
+      address = geocoded?.address ?? null;
+      country = geocoded?.country ?? null;
+    }
+  }
 
   const originalBuffer = await readProjectFile(photo.originalPath);
   const stampedBuffer = await renderStampedImage(
@@ -54,9 +78,9 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     {
       title: photo.project.name,
       address,
-      latitude: photo.latitude,
-      longitude: photo.longitude,
-      accuracy: photo.accuracy,
+      latitude,
+      longitude,
+      accuracy,
       capturedAt: photo.capturedAt,
       note,
     },
@@ -70,6 +94,10 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     data: {
       note,
       address,
+      country,
+      latitude,
+      longitude,
+      accuracy,
       cropData: crop ? JSON.stringify(crop) : null,
     },
   });

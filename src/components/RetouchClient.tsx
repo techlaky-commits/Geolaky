@@ -1,10 +1,30 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Cropper, { type Area } from "react-easy-crop";
-import { Download, Loader2, RotateCcw, RotateCw, Save, Trash2, ZoomIn } from "lucide-react";
+import {
+  Download,
+  ImageUp,
+  Loader2,
+  MapPinned,
+  RotateCcw,
+  RotateCw,
+  Save,
+  Trash2,
+  ZoomIn,
+} from "lucide-react";
+
+const PositionMap = dynamic(() => import("@/components/PositionMap"), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-64 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-400">
+      <Loader2 className="h-5 w-5 animate-spin" />
+    </div>
+  ),
+});
 
 type PhotoData = {
   id: string;
@@ -14,6 +34,8 @@ type PhotoData = {
   stampedPath: string;
   address: string | null;
   note: string | null;
+  latitude: number | null;
+  longitude: number | null;
   updatedAt: string;
   cropData: string | null;
 };
@@ -25,9 +47,27 @@ const ASPECT_OPTIONS = [
   { label: "16:9", value: 16 / 9 },
 ];
 
+const DEFAULT_POSITION = { latitude: 48.8566, longitude: 2.3522 }; // Paris, si aucune position n'est definie
+
+function parsePastedCoords(input: string): { latitude: number; longitude: number } | null {
+  const match = input.trim().match(/(-?\d+(?:\.\d+)?)\s*[,;\s]\s*(-?\d+(?:\.\d+)?)/);
+  if (!match) return null;
+  const latitude = Number(match[1]);
+  const longitude = Number(match[2]);
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null;
+  return { latitude, longitude };
+}
+
 export function RetouchClient({ photo }: { photo: PhotoData }) {
   const router = useRouter();
   const savedCrop = useMemo(() => (photo.cropData ? JSON.parse(photo.cropData) : null), [photo.cropData]);
+  const originalPosition = useMemo(
+    () =>
+      photo.latitude !== null && photo.longitude !== null
+        ? { latitude: photo.latitude, longitude: photo.longitude }
+        : null,
+    [photo.latitude, photo.longitude],
+  );
 
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
@@ -39,15 +79,37 @@ export function RetouchClient({ photo }: { photo: PhotoData }) {
 
   const [address, setAddress] = useState(photo.address ?? "");
   const [note, setNote] = useState(photo.note ?? "");
+  const [position, setPosition] = useState(originalPosition);
+  const [pasteCoords, setPasteCoords] = useState("");
   const [editingCrop, setEditingCrop] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [replacing, setReplacing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [version, setVersion] = useState(0);
+
+  const replaceInputRef = useRef<HTMLInputElement>(null);
 
   const onCropComplete = useCallback((_area: Area, areaPixels: Area) => {
     setCroppedAreaPixels(areaPixels);
   }, []);
+
+  const positionChanged =
+    position !== null &&
+    (!originalPosition ||
+      position.latitude !== originalPosition.latitude ||
+      position.longitude !== originalPosition.longitude);
+
+  function applyPastedCoords() {
+    const parsed = parsePastedCoords(pasteCoords);
+    if (!parsed) {
+      setError("Format de coordonnees invalide. Exemple : 48.858370, 2.294481");
+      return;
+    }
+    setPosition(parsed);
+    setPasteCoords("");
+    setError(null);
+  }
 
   async function onSave() {
     setSaving(true);
@@ -59,6 +121,7 @@ export function RetouchClient({ photo }: { photo: PhotoData }) {
         body: JSON.stringify({
           address: address.trim() || null,
           note: note.trim() || null,
+          position: positionChanged ? position : undefined,
           crop: editingCrop && croppedAreaPixels
             ? {
                 x: croppedAreaPixels.x,
@@ -94,8 +157,33 @@ export function RetouchClient({ photo }: { photo: PhotoData }) {
     }
   }
 
+  async function onReplaceFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!confirm("Remplacer l'image actuelle par cette nouvelle photo ? Le recadrage en cours sera reinitialise.")) {
+      return;
+    }
+
+    setReplacing(true);
+    setError(null);
+    const form = new FormData();
+    form.append("file", file);
+    try {
+      const res = await fetch(`/api/photos/${photo.id}/replace`, { method: "POST", body: form });
+      if (!res.ok) throw new Error("replace failed");
+      setEditingCrop(false);
+      setVersion((v) => v + 1);
+      router.refresh();
+    } catch {
+      setError("Impossible de remplacer la photo.");
+    } finally {
+      setReplacing(false);
+    }
+  }
+
   const stampedUrl = `/api/files/${photo.stampedPath}?v=${version}`;
-  const originalUrl = `/api/files/${photo.originalPath}`;
+  const originalUrl = `/api/files/${photo.originalPath}?v=${version}`;
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -183,7 +271,7 @@ export function RetouchClient({ photo }: { photo: PhotoData }) {
         </div>
       )}
 
-      <div className="mt-4">
+      <div className="mt-4 flex flex-wrap gap-4">
         <button
           type="button"
           onClick={() => setEditingCrop((v) => !v)}
@@ -191,9 +279,27 @@ export function RetouchClient({ photo }: { photo: PhotoData }) {
         >
           {editingCrop ? "Annuler le recadrage" : "Modifier le cadrage / la rotation"}
         </button>
+
+        <input
+          ref={replaceInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={onReplaceFileSelected}
+        />
+        <button
+          type="button"
+          onClick={() => replaceInputRef.current?.click()}
+          disabled={replacing}
+          className="flex items-center gap-1 text-sm font-medium text-brand-600 hover:underline disabled:opacity-60"
+        >
+          {replacing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImageUp className="h-3.5 w-3.5" />}
+          Remplacer la photo
+        </button>
       </div>
 
-      <div className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+      <div className="mt-6 space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+        <h2 className="text-sm font-semibold text-slate-900">Description</h2>
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Adresse affichee sur le tampon</label>
           <input
@@ -212,7 +318,89 @@ export function RetouchClient({ photo }: { photo: PhotoData }) {
             className="w-full rounded-md border border-slate-300 px-3 py-2"
           />
         </div>
+      </div>
 
+      <div className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+        <h2 className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+          <MapPinned className="h-4 w-4" />
+          Emplacement
+        </h2>
+
+        {position ? (
+          <>
+            <PositionMap
+              latitude={position.latitude}
+              longitude={position.longitude}
+              onChange={(latitude, longitude) => setPosition({ latitude, longitude })}
+            />
+            <p className="text-xs text-slate-500">
+              Faites glisser le repere rouge pour affiner la position directement sur la carte.
+            </p>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-700">Latitude</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={position.latitude}
+                  onChange={(e) =>
+                    setPosition((p) => (p ? { ...p, latitude: Number(e.target.value) } : p))
+                  }
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-700">Longitude</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={position.longitude}
+                  onChange={(e) =>
+                    setPosition((p) => (p ? { ...p, longitude: Number(e.target.value) } : p))
+                  }
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-700">
+                Ou coller des coordonnees GPS exactes
+              </label>
+              <div className="flex gap-2">
+                <input
+                  value={pasteCoords}
+                  onChange={(e) => setPasteCoords(e.target.value)}
+                  placeholder="48.858370, 2.294481"
+                  className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={applyPastedCoords}
+                  disabled={!pasteCoords.trim()}
+                  className="shrink-0 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                >
+                  Appliquer
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-500">
+            Cette photo n&apos;a pas de position enregistree.
+            <button
+              type="button"
+              onClick={() => setPosition(DEFAULT_POSITION)}
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-slate-700 hover:bg-slate-50"
+            >
+              Definir une position
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-white p-4">
         {error && <p className="text-sm text-red-600">{error}</p>}
 
         <div className="flex items-center justify-between pt-2">

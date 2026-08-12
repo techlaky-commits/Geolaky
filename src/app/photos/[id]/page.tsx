@@ -20,6 +20,8 @@ export default async function PhotoPage({ params }: { params: { id: string } }) 
         stampedPath: photo.stampedPath,
         address: photo.address,
         note: photo.note,
+        latitude: photo.latitude,
+        longitude: photo.longitude,
         updatedAt: photo.updatedAt.toISOString(),
         cropData: photo.cropData,
       }}

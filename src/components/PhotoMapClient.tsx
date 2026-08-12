@@ -6,9 +6,9 @@ import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 
 import { useEffect, useMemo, useState } from "react";
 import L from "leaflet";
-import { LayersControl, MapContainer, Marker, TileLayer } from "react-leaflet";
+import { LayersControl, MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
-import { Loader2, MapPin, X } from "lucide-react";
+import { Check, Loader2, MapPin, X } from "lucide-react";
 import { PhotoLightbox, type LightboxPhoto } from "@/components/PhotoLightbox";
 
 type MapPhoto = {
@@ -119,7 +119,48 @@ function toLightboxPhotos(members: MapPhoto[]): LightboxPhoto[] {
     address: m.address,
     note: m.note,
     capturedAt: m.capturedAt,
+    latitude: m.latitude,
+    longitude: m.longitude,
   }));
+}
+
+const repositionIcon = L.divIcon({
+  className: "",
+  html: `
+    <div style="width:28px;height:28px;border-radius:50%;background:#ef4444;border:3px solid #ffffff;box-shadow:0 2px 8px rgba(0,0,0,0.5);cursor:grab;"></div>
+  `,
+  iconSize: [28, 28],
+  iconAnchor: [14, 14],
+});
+
+/** Centre la carte sur le marqueur au moment ou le mode repositionnement demarre. */
+function RepositionMarker({
+  position,
+  onDrag,
+}: {
+  position: [number, number];
+  onDrag: (pos: [number, number]) => void;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    map.flyTo(position, Math.max(map.getZoom(), 18), { duration: 0.5 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <Marker
+      position={position}
+      icon={repositionIcon}
+      draggable
+      eventHandlers={{
+        dragend: (e) => {
+          const latLng = e.target.getLatLng();
+          onDrag([latLng.lat, latLng.lng]);
+        },
+      }}
+    />
+  );
 }
 
 const IGN_WMTS_BASE = "https://data.geopf.fr/wmts?SERVICE=WMTS&VERSION=1.0.0&REQUEST=GetTile";
@@ -130,8 +171,15 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
   const [projectFilter, setProjectFilter] = useState<string>(initialProjectId ?? "");
   const [countryFilter, setCountryFilter] = useState<string>("");
   const [lightboxPoint, setLightboxPoint] = useState<MapPoint | null>(null);
+  const [reposition, setReposition] = useState<{
+    photoId: string;
+    latitude: number;
+    longitude: number;
+  } | null>(null);
+  const [savingPosition, setSavingPosition] = useState(false);
+  const [positionError, setPositionError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadPhotos = () => {
     fetch("/api/photos/map")
       .then((res) => {
         if (!res.ok) throw new Error("fetch failed");
@@ -139,7 +187,31 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
       })
       .then((data) => setPhotos(data.photos))
       .catch(() => setError("Impossible de charger les photos geolocalisees."));
-  }, []);
+  };
+
+  useEffect(loadPhotos, []);
+
+  async function saveRepositionedPhoto() {
+    if (!reposition) return;
+    setSavingPosition(true);
+    setPositionError(null);
+    try {
+      const res = await fetch(`/api/photos/${reposition.photoId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          position: { latitude: reposition.latitude, longitude: reposition.longitude },
+        }),
+      });
+      if (!res.ok) throw new Error("update failed");
+      setReposition(null);
+      loadPhotos();
+    } catch {
+      setPositionError("Impossible d'enregistrer la nouvelle position.");
+    } finally {
+      setSavingPosition(false);
+    }
+  }
 
   const projectOptions = useMemo(() => {
     if (!photos) return [];
@@ -270,6 +342,15 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
               tileSize={256}
             />
           </LayersControl.Overlay>
+          <LayersControl.Overlay name="Cadastre (Italie)">
+            <TileLayer
+              attribution="Catasto &copy; Agenzia delle Entrate"
+              url="/api/tiles/it-cadastre/{z}/{x}/{y}"
+              minZoom={15}
+              maxZoom={19}
+              tileSize={256}
+            />
+          </LayersControl.Overlay>
         </LayersControl>
 
         <MarkerClusterGroup
@@ -295,12 +376,59 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
             />
           ))}
         </MarkerClusterGroup>
+
+        {reposition && (
+          <RepositionMarker
+            position={[reposition.latitude, reposition.longitude]}
+            onDrag={([latitude, longitude]) =>
+              setReposition((prev) => (prev ? { ...prev, latitude, longitude } : prev))
+            }
+          />
+        )}
       </MapContainer>
+
+      {reposition && (
+        <div className="absolute inset-x-0 bottom-4 z-[1000] mx-auto flex w-fit max-w-[92%] flex-col items-center gap-2 rounded-lg bg-white/95 p-3 text-center shadow-md backdrop-blur">
+          <p className="text-sm text-slate-600">
+            Faites glisser le repere rouge jusqu&apos;a la position exacte de la photo.
+          </p>
+          {positionError && <p className="text-sm text-red-600">{positionError}</p>}
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                setReposition(null);
+                setPositionError(null);
+              }}
+              disabled={savingPosition}
+              className="flex items-center gap-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+            >
+              <X className="h-3.5 w-3.5" />
+              Annuler
+            </button>
+            <button
+              onClick={saveRepositionedPhoto}
+              disabled={savingPosition}
+              className="flex items-center gap-1 rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
+            >
+              {savingPosition ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Check className="h-3.5 w-3.5" />
+              )}
+              Enregistrer la position
+            </button>
+          </div>
+        </div>
+      )}
 
       {lightboxPoint && (
         <PhotoLightbox
           photos={toLightboxPhotos(lightboxPoint.members)}
           onClose={() => setLightboxPoint(null)}
+          onEditPosition={(photo) => {
+            setLightboxPoint(null);
+            setReposition({ photoId: photo.id, latitude: photo.latitude, longitude: photo.longitude });
+          }}
         />
       )}
     </div>

@@ -1,0 +1,58 @@
+// Provider SQLite pour un dev local sans dependance externe (zero-config).
+// Pour la production, changer "provider" en "postgresql" et pointer
+// DATABASE_URL vers une instance Postgres (Neon, Supabase, RDS...).
+// Le schema (modeles, relations) reste identique dans les deux cas.
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique
+  name      String?
+  password  String
+  createdAt DateTime  @default(now())
+  projects  Project[]
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  name        String
+  address     String?
+  description String?
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  photos      Photo[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Photo {
+  id           String   @id @default(cuid())
+  projectId    String
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // Chemins relatifs sous STORAGE_DIR
+  originalPath String
+  stampedPath  String
+
+  latitude     Float?
+  longitude    Float?
+  accuracy     Float?
+  address      String?
+  note         String?
+
+  // Parametres de recadrage/rotation appliques a l'original (JSON serialise)
+  cropData     String?
+
+  capturedAt   DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([projectId])
+}

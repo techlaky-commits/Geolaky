@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background-color: #f4f6fb;
+  color: #0f172a;
+}
+
+input,
+textarea {
+  outline: none;
+}
+
+/* Evite le zoom automatique iOS sur les champs de formulaire */
+input,
+select,
+textarea {
+  font-size: 16px;
+}

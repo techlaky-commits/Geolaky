@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Camera, Download, MapPin } from "lucide-react";
+import { Camera, Download, Map, MapPin } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 
@@ -27,6 +27,13 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
           )}
         </div>
         <div className="flex gap-2">
+          <Link
+            href={`/map?projectId=${project.id}`}
+            className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            <Map className="h-4 w-4" />
+            Voir sur la carte
+          </Link>
           <a
             href={`/api/projects/${project.id}/report`}
             className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"

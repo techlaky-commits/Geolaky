@@ -45,6 +45,7 @@ model Photo {
   longitude    Float?
   accuracy     Float?
   address      String?
+  country      String?
   note         String?
 
   // Parametres de recadrage/rotation appliques a l'original (JSON serialise)

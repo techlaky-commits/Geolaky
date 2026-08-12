@@ -3,6 +3,7 @@ import "./globals.css";
 import { Providers } from "@/components/Providers";
 import { PwaRegister } from "@/components/PwaRegister";
 import { Nav } from "@/components/Nav";
+import { MainShell } from "@/components/MainShell";
 
 export const metadata: Metadata = {
   title: "Geolaky",
@@ -25,11 +26,11 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr">
-      <body>
+      <body className="flex min-h-screen flex-col">
         <Providers>
           <PwaRegister />
           <Nav />
-          <main className="mx-auto max-w-5xl px-4 py-6">{children}</main>
+          <MainShell>{children}</MainShell>
         </Providers>
       </body>
     </html>

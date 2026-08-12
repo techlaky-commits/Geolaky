@@ -49,10 +49,12 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
   const originalBuffer = Buffer.from(await file.arrayBuffer());
 
-  const address =
+  const geocoded =
     latitude !== undefined && longitude !== undefined
       ? await reverseGeocode(latitude, longitude)
       : null;
+  const address = geocoded?.address ?? null;
+  const country = geocoded?.country ?? null;
 
   const capturedDate = capturedAt ?? new Date();
 
@@ -78,6 +80,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       longitude: longitude ?? null,
       accuracy: accuracy ?? null,
       address,
+      country,
       note: note ?? null,
       capturedAt: capturedDate,
     },

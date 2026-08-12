@@ -19,6 +19,7 @@ export const config = {
     "/projects/:path*",
     "/capture/:path*",
     "/photos/:path*",
+    "/map/:path*",
     "/api/projects/:path*",
     "/api/photos/:path*",
     "/api/files/:path*",

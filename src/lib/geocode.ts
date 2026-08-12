@@ -1,3 +1,8 @@
+export type GeocodeResult = {
+  address: string;
+  country: string | null;
+};
+
 /**
  * Geocodage inverse via Nominatim (OpenStreetMap), gratuit mais soumis a une
  * politique d'usage stricte (User-Agent obligatoire, ~1 req/s). Suffisant pour
@@ -7,7 +12,7 @@
 export async function reverseGeocode(
   latitude: number,
   longitude: number,
-): Promise<string | null> {
+): Promise<GeocodeResult | null> {
   try {
     const url = new URL("https://nominatim.openstreetmap.org/reverse");
     url.searchParams.set("format", "jsonv2");
@@ -31,8 +36,13 @@ export async function reverseGeocode(
       console.warn(`[geocode] Nominatim a repondu ${res.status}`);
       return null;
     }
-    const data = (await res.json()) as { display_name?: string };
-    return data.display_name ?? null;
+    const data = (await res.json()) as {
+      display_name?: string;
+      address?: { country?: string };
+    };
+    if (!data.display_name) return null;
+
+    return { address: data.display_name, country: data.address?.country ?? null };
   } catch (err) {
     // Pas bloquant : la photo reste utilisable sans adresse resolue.
     console.warn("[geocode] echec du geocodage inverse:", err);

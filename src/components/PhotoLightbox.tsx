@@ -70,14 +70,14 @@ export function PhotoLightbox({
         </button>
       </div>
 
-      <div className="relative flex flex-1 items-center justify-center px-2 pb-2">
+      <div className="relative flex flex-1 items-center justify-center overflow-hidden px-14 py-2">
         {count > 1 && (
           <button
             onClick={(e) => {
               e.stopPropagation();
               prev();
             }}
-            className="absolute left-2 z-10 rounded-full bg-black/50 p-2 text-white hover:bg-black/70 sm:left-4"
+            className="absolute left-2 z-10 rounded-full bg-black/60 p-2 text-white hover:bg-black/80 sm:left-4"
             aria-label="Photo precedente"
           >
             <ChevronLeft className="h-6 w-6" />
@@ -98,7 +98,7 @@ export function PhotoLightbox({
               e.stopPropagation();
               next();
             }}
-            className="absolute right-2 z-10 rounded-full bg-black/50 p-2 text-white hover:bg-black/70 sm:right-4"
+            className="absolute right-2 z-10 rounded-full bg-black/60 p-2 text-white hover:bg-black/80 sm:right-4"
             aria-label="Photo suivante"
           >
             <ChevronRight className="h-6 w-6" />
@@ -107,17 +107,17 @@ export function PhotoLightbox({
       </div>
 
       <div
-        className="space-y-1 bg-gradient-to-t from-black/80 to-transparent px-5 py-4 text-white"
+        className="max-h-[35vh] space-y-1 overflow-y-auto bg-slate-950 px-5 py-4 text-white"
         onClick={(e) => e.stopPropagation()}
       >
         <p className="text-sm font-semibold">{current.projectName}</p>
         {current.address && <p className="text-sm text-white/80">{current.address}</p>}
         <p className="text-xs text-white/60">{formatDateTime(current.capturedAt)}</p>
         {current.note && <p className="text-sm italic text-white/80">{current.note}</p>}
-        <div className="mt-2 flex flex-wrap items-center gap-4">
+        <div className="mt-2 flex flex-wrap items-center gap-2">
           <Link
             href={`/photos/${current.id}`}
-            className="inline-flex items-center gap-1 text-sm font-medium text-brand-300 hover:underline"
+            className="inline-flex items-center gap-1 rounded-md border border-white/25 px-3 py-1.5 text-sm font-medium text-white hover:bg-white/10"
           >
             Ouvrir dans l&apos;editeur
             <ExternalLink className="h-3.5 w-3.5" />
@@ -125,7 +125,7 @@ export function PhotoLightbox({
           {onEditPosition && (
             <button
               onClick={() => onEditPosition(current)}
-              className="inline-flex items-center gap-1 text-sm font-medium text-brand-300 hover:underline"
+              className="inline-flex items-center gap-1 rounded-md border border-white/25 px-3 py-1.5 text-sm font-medium text-white hover:bg-white/10"
             >
               Modifier la position
               <MapPinned className="h-3.5 w-3.5" />

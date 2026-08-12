@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Cropper, { type Area } from "react-easy-crop";
 import {
   Download,
@@ -60,6 +60,7 @@ function parsePastedCoords(input: string): { latitude: number; longitude: number
 
 export function RetouchClient({ photo }: { photo: PhotoData }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const savedCrop = useMemo(() => (photo.cropData ? JSON.parse(photo.cropData) : null), [photo.cropData]);
   const originalPosition = useMemo(
     () =>
@@ -81,7 +82,7 @@ export function RetouchClient({ photo }: { photo: PhotoData }) {
   const [note, setNote] = useState(photo.note ?? "");
   const [position, setPosition] = useState(originalPosition);
   const [pasteCoords, setPasteCoords] = useState("");
-  const [editingCrop, setEditingCrop] = useState(false);
+  const [editingCrop, setEditingCrop] = useState(searchParams.get("edit") === "crop");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [replacing, setReplacing] = useState(false);
@@ -92,6 +93,14 @@ export function RetouchClient({ photo }: { photo: PhotoData }) {
 
   const onCropComplete = useCallback((_area: Area, areaPixels: Area) => {
     setCroppedAreaPixels(areaPixels);
+  }, []);
+
+  useEffect(() => {
+    if (window.location.hash !== "#emplacement") return;
+    const timer = setTimeout(() => {
+      document.getElementById("emplacement")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 250);
+    return () => clearTimeout(timer);
   }, []);
 
   const positionChanged =
@@ -324,7 +333,7 @@ export function RetouchClient({ photo }: { photo: PhotoData }) {
         </div>
       </div>
 
-      <div className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+      <div id="emplacement" className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-white p-4">
         <h2 className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
           <MapPinned className="h-4 w-4" />
           Emplacement

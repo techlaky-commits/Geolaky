@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Camera, Download, Map, MapPin } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
+import { PhotoGalleryGrid } from "@/components/PhotoGalleryGrid";
 
 export default async function ProjectDetailPage({ params }: { params: { id: string } }) {
   const user = await getCurrentUser();
@@ -56,23 +57,16 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
           Aucune photo pour ce projet. Utilisez &laquo;&nbsp;Prendre une photo&nbsp;&raquo; depuis votre mobile.
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-          {project.photos.map((photo) => (
-            <Link
-              key={photo.id}
-              href={`/photos/${photo.id}`}
-              className="group overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm"
-            >
-              {/* Servi via une route API protegee, pas via /public : usage d'un <img> classique. */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={`/api/files/${photo.stampedPath}`}
-                alt={photo.address || project.name}
-                className="aspect-square w-full object-cover transition group-hover:opacity-90"
-              />
-            </Link>
-          ))}
-        </div>
+        <>
+          <p className="mb-3 text-sm text-slate-500">
+            Clic droit sur une photo pour un acces rapide (cadrage, position, remplacement,
+            telechargement, suppression).
+          </p>
+          <PhotoGalleryGrid
+            photos={project.photos.map((p) => ({ id: p.id, stampedPath: p.stampedPath, address: p.address }))}
+            projectName={project.name}
+          />
+        </>
       )}
     </div>
   );

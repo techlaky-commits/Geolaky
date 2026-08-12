@@ -5,11 +5,11 @@ import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import L from "leaflet";
-import { MapContainer, Marker, Popup, TileLayer } from "react-leaflet";
+import { LayersControl, MapContainer, Marker, TileLayer } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import { Loader2, MapPin, X } from "lucide-react";
+import { PhotoLightbox, type LightboxPhoto } from "@/components/PhotoLightbox";
 
 type MapPhoto = {
   id: string;
@@ -21,20 +21,80 @@ type MapPhoto = {
   address: string | null;
   country: string | null;
   note: string | null;
+  groupId: string | null;
   capturedAt: string;
 };
 
-function photoIcon(url: string) {
-  return L.divIcon({
+/** Un point sur la carte : soit une photo isolee, soit un lot de photos
+ * prises/importees ensemble (meme groupId), fusionnees en un seul marqueur. */
+type MapPoint = {
+  key: string;
+  latitude: number;
+  longitude: number;
+  coverUrl: string;
+  members: MapPhoto[];
+};
+
+type DivIconWithMeta = L.DivIcon & { options: L.DivIconOptions & { thumbUrl?: string; photoCount?: number } };
+
+function buildMapPoints(photos: MapPhoto[]): MapPoint[] {
+  const groups = new Map<string, MapPhoto[]>();
+  const points: MapPoint[] = [];
+
+  for (const photo of photos) {
+    if (!photo.groupId) {
+      points.push({
+        key: photo.id,
+        latitude: photo.latitude,
+        longitude: photo.longitude,
+        coverUrl: `/api/files/${photo.stampedPath}`,
+        members: [photo],
+      });
+      continue;
+    }
+    const arr = groups.get(photo.groupId) ?? [];
+    arr.push(photo);
+    groups.set(photo.groupId, arr);
+  }
+
+  for (const members of groups.values()) {
+    const sorted = [...members].sort(
+      (a, b) => new Date(a.capturedAt).getTime() - new Date(b.capturedAt).getTime(),
+    );
+    const latitude = members.reduce((sum, m) => sum + m.latitude, 0) / members.length;
+    const longitude = members.reduce((sum, m) => sum + m.longitude, 0) / members.length;
+    points.push({
+      key: sorted[0].groupId as string,
+      latitude,
+      longitude,
+      coverUrl: `/api/files/${sorted[0].stampedPath}`,
+      members: sorted,
+    });
+  }
+
+  return points;
+}
+
+function photoIcon(url: string, count: number): DivIconWithMeta {
+  const badge =
+    count > 1
+      ? `<div style="position:absolute;left:6px;bottom:3px;color:#ffffff;font-weight:700;font-size:15px;font-family:system-ui,sans-serif;text-shadow:0 1px 4px rgba(0,0,0,0.95);">${count}</div>`
+      : "";
+  const size = count > 1 ? 64 : 56;
+  const icon = L.divIcon({
     className: "",
     html: `
-      <div style="width:56px;height:56px;border-radius:12px;overflow:hidden;border:2.5px solid #ffffff;box-shadow:0 2px 8px rgba(0,0,0,0.45);">
+      <div style="position:relative;width:${size}px;height:${size}px;border-radius:14px;overflow:hidden;border:2.5px solid #ffffff;box-shadow:0 2px 8px rgba(0,0,0,0.45);">
         <img src="${url}" style="width:100%;height:100%;object-fit:cover;display:block;" />
+        ${badge}
       </div>
     `,
-    iconSize: [56, 56],
-    iconAnchor: [28, 28],
-  });
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  }) as DivIconWithMeta;
+  icon.options.thumbUrl = url;
+  icon.options.photoCount = count;
+  return icon;
 }
 
 function clusterIcon(url: string, count: number) {
@@ -51,17 +111,25 @@ function clusterIcon(url: string, count: number) {
   });
 }
 
-function formatDateTime(iso: string) {
-  return new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(
-    new Date(iso),
-  );
+function toLightboxPhotos(members: MapPhoto[]): LightboxPhoto[] {
+  return members.map((m) => ({
+    id: m.id,
+    projectName: m.projectName,
+    stampedPath: m.stampedPath,
+    address: m.address,
+    note: m.note,
+    capturedAt: m.capturedAt,
+  }));
 }
+
+const IGN_WMTS_BASE = "https://data.geopf.fr/wmts?SERVICE=WMTS&VERSION=1.0.0&REQUEST=GetTile";
 
 export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string }) {
   const [photos, setPhotos] = useState<MapPhoto[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [projectFilter, setProjectFilter] = useState<string>(initialProjectId ?? "");
   const [countryFilter, setCountryFilter] = useState<string>("");
+  const [lightboxPoint, setLightboxPoint] = useState<MapPoint | null>(null);
 
   useEffect(() => {
     fetch("/api/photos/map")
@@ -98,6 +166,8 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
     );
   }, [photos, projectFilter, countryFilter]);
 
+  const mapPoints = useMemo(() => buildMapPoints(filteredPhotos), [filteredPhotos]);
+
   const hasFilter = Boolean(projectFilter || countryFilter);
 
   if (error) {
@@ -122,7 +192,10 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
     );
   }
 
-  const center: [number, number] = [filteredPhotos[0]?.latitude ?? photos[0].latitude, filteredPhotos[0]?.longitude ?? photos[0].longitude];
+  const center: [number, number] = [
+    mapPoints[0]?.latitude ?? photos[0].latitude,
+    mapPoints[0]?.longitude ?? photos[0].longitude,
+  ];
 
   return (
     <div className="relative h-full min-h-[70vh] w-full">
@@ -177,42 +250,59 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
           url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
           maxZoom={19}
         />
+
+        <LayersControl position="topright">
+          <LayersControl.Overlay name="Cadastre (France)">
+            <TileLayer
+              attribution="Cadastre &copy; IGN / DGFiP"
+              url={`${IGN_WMTS_BASE}&LAYER=CADASTRALPARCELS.PARCELLAIRE_EXPRESS&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/png`}
+              minZoom={14}
+              maxZoom={19}
+              tileSize={256}
+            />
+          </LayersControl.Overlay>
+          <LayersControl.Overlay name="Limites administratives (France)">
+            <TileLayer
+              attribution="Limites administratives &copy; IGN"
+              url={`${IGN_WMTS_BASE}&LAYER=LIMITES_ADMINISTRATIVES_EXPRESS.LATEST&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/png`}
+              minZoom={6}
+              maxZoom={16}
+              tileSize={256}
+            />
+          </LayersControl.Overlay>
+        </LayersControl>
+
         <MarkerClusterGroup
           chunkedLoading
-          iconCreateFunction={(cluster: { getChildCount: () => number; getAllChildMarkers: () => Array<{ options: { icon?: { options?: { thumbUrl?: string } } } }> }) => {
+          iconCreateFunction={(cluster: {
+            getAllChildMarkers: () => Array<{ options: { icon?: DivIconWithMeta } }>;
+          }) => {
             const markers = cluster.getAllChildMarkers();
+            const totalCount = markers.reduce(
+              (sum, m) => sum + (m.options.icon?.options?.photoCount ?? 1),
+              0,
+            );
             const firstUrl = markers[0]?.options.icon?.options?.thumbUrl ?? "";
-            return clusterIcon(firstUrl, cluster.getChildCount());
+            return clusterIcon(firstUrl, totalCount);
           }}
         >
-          {filteredPhotos.map((photo) => {
-            const url = `/api/files/${photo.stampedPath}`;
-            const icon = photoIcon(url);
-            // @ts-expect-error - on stocke l'url de vignette pour la reutiliser dans l'icone de cluster
-            icon.options.thumbUrl = url;
-            return (
-              <Marker key={photo.id} position={[photo.latitude, photo.longitude]} icon={icon}>
-                <Popup minWidth={220}>
-                  <div className="space-y-1">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={url} alt="" className="mb-2 w-full rounded-md" />
-                    <p className="text-xs font-semibold text-slate-700">{photo.projectName}</p>
-                    {photo.address && <p className="text-xs text-slate-500">{photo.address}</p>}
-                    <p className="text-xs text-slate-500">{formatDateTime(photo.capturedAt)}</p>
-                    {photo.note && <p className="text-xs italic text-slate-500">{photo.note}</p>}
-                    <Link
-                      href={`/photos/${photo.id}`}
-                      className="mt-1 inline-block text-xs font-medium text-brand-600 hover:underline"
-                    >
-                      Ouvrir la photo &rarr;
-                    </Link>
-                  </div>
-                </Popup>
-              </Marker>
-            );
-          })}
+          {mapPoints.map((point) => (
+            <Marker
+              key={point.key}
+              position={[point.latitude, point.longitude]}
+              icon={photoIcon(point.coverUrl, point.members.length)}
+              eventHandlers={{ click: () => setLightboxPoint(point) }}
+            />
+          ))}
         </MarkerClusterGroup>
       </MapContainer>
+
+      {lightboxPoint && (
+        <PhotoLightbox
+          photos={toLightboxPhotos(lightboxPoint.members)}
+          onClose={() => setLightboxPoint(null)}
+        />
+      )}
     </div>
   );
 }

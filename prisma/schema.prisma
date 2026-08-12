@@ -51,9 +51,15 @@ model Photo {
   // Parametres de recadrage/rotation appliques a l'original (JSON serialise)
   cropData     String?
 
+  // Identifiant partage par les photos prises/importees dans le meme lot
+  // (rafale mobile ou import groupe) : meme commentaire, affichage regroupe
+  // sur la carte. Null pour une photo isolee.
+  groupId      String?
+
   capturedAt   DateTime
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   @@index([projectId])
+  @@index([groupId])
 }

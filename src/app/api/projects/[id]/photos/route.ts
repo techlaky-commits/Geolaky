@@ -15,6 +15,7 @@ const fieldsSchema = z.object({
   accuracy: z.coerce.number().min(0).max(100000).optional(),
   capturedAt: z.coerce.date().optional(),
   note: z.string().trim().max(1000).optional(),
+  groupId: z.string().trim().min(1).max(60).optional(),
 });
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
@@ -41,11 +42,12 @@ export async function POST(request: Request, { params }: { params: { id: string 
     accuracy: form.get("accuracy") ?? undefined,
     capturedAt: form.get("capturedAt") ?? undefined,
     note: form.get("note") ?? undefined,
+    groupId: form.get("groupId") ?? undefined,
   });
   if (!parsed.success) {
     return NextResponse.json({ error: "Metadonnees invalides" }, { status: 400 });
   }
-  const { latitude, longitude, accuracy, capturedAt, note } = parsed.data;
+  const { latitude, longitude, accuracy, capturedAt, note, groupId } = parsed.data;
 
   const originalBuffer = Buffer.from(await file.arrayBuffer());
 
@@ -82,6 +84,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       address,
       country,
       note: note ?? null,
+      groupId: groupId ?? null,
       capturedAt: capturedDate,
     },
   });

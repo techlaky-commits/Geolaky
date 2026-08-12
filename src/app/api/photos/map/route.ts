@@ -22,6 +22,7 @@ export async function GET() {
       address: true,
       country: true,
       note: true,
+      groupId: true,
       capturedAt: true,
     },
     orderBy: { capturedAt: "desc" },
@@ -38,6 +39,7 @@ export async function GET() {
       address: p.address,
       country: p.country,
       note: p.note,
+      groupId: p.groupId,
       capturedAt: p.capturedAt,
     })),
   });

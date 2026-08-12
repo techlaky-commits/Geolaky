@@ -96,9 +96,10 @@ export function RetouchClient({ photo }: { photo: PhotoData }) {
   }, []);
 
   useEffect(() => {
-    if (window.location.hash !== "#emplacement") return;
+    const targetId = window.location.hash.replace("#", "");
+    if (!targetId) return;
     const timer = setTimeout(() => {
-      document.getElementById("emplacement")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      document.getElementById(targetId)?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 250);
     return () => clearTimeout(timer);
   }, []);
@@ -311,7 +312,7 @@ export function RetouchClient({ photo }: { photo: PhotoData }) {
         </button>
       </div>
 
-      <div className="mt-6 space-y-3 rounded-xl border border-slate-200 bg-white p-4">
+      <div id="description" className="mt-6 space-y-3 rounded-xl border border-slate-200 bg-white p-4">
         <h2 className="text-sm font-semibold text-slate-900">Description</h2>
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Adresse affichee sur le tampon</label>

@@ -3,15 +3,7 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  Crop,
-  Download,
-  ExternalLink,
-  ImageUp,
-  Loader2,
-  MapPinned,
-  Trash2,
-} from "lucide-react";
+import { Download, ExternalLink, ImageUp, Loader2, MapPinned, Trash2 } from "lucide-react";
 import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
 
 type GalleryPhoto = {
@@ -86,14 +78,9 @@ export function PhotoGalleryGrid({
   const menuItems: ContextMenuItem[] = menu
     ? [
         {
-          label: "Ouvrir",
+          label: "Modifier la description",
           icon: <ExternalLink className="h-4 w-4" />,
-          onClick: () => router.push(`/photos/${menu.photo.id}`),
-        },
-        {
-          label: "Modifier le cadrage",
-          icon: <Crop className="h-4 w-4" />,
-          onClick: () => router.push(`/photos/${menu.photo.id}?edit=crop`),
+          onClick: () => router.push(`/photos/${menu.photo.id}#description`),
         },
         {
           label: "Modifier la position",

@@ -23,3 +23,15 @@ select,
 textarea {
   font-size: 16px;
 }
+
+/* Halo du repere de repositionnement (carte + mini-carte de position) */
+@keyframes geolaky-pulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}

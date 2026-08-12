@@ -9,10 +9,13 @@ import { LayersControl, MapContainer, Marker, TileLayer, useMap } from "react-le
 const pinIcon = L.divIcon({
   className: "",
   html: `
-    <div style="width:26px;height:26px;border-radius:50%;background:#ef4444;border:3px solid #ffffff;box-shadow:0 2px 8px rgba(0,0,0,0.5);cursor:grab;"></div>
+    <div style="position:relative;width:44px;height:44px;">
+      <div style="position:absolute;inset:0;border-radius:50%;background:rgba(239,68,68,0.35);animation:geolaky-pulse 1.4s ease-out infinite;"></div>
+      <div style="position:absolute;top:8px;left:8px;width:28px;height:28px;border-radius:50%;background:#ef4444;border:3px solid #ffffff;box-shadow:0 2px 10px rgba(0,0,0,0.6);cursor:grab;"></div>
+    </div>
   `,
-  iconSize: [26, 26],
-  iconAnchor: [13, 13],
+  iconSize: [44, 44],
+  iconAnchor: [22, 22],
 });
 
 const IGN_WMTS_BASE = "https://data.geopf.fr/wmts?SERVICE=WMTS&VERSION=1.0.0&REQUEST=GetTile";
@@ -38,13 +41,22 @@ export default function PositionMap({
   return (
     <div className="h-64 w-full overflow-hidden rounded-lg border border-slate-200">
       <MapContainer center={[latitude, longitude]} zoom={18} scrollWheelZoom className="h-full w-full">
-        <TileLayer
-          attribution="Tiles &copy; Esri"
-          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-          maxZoom={19}
-        />
-
         <LayersControl position="topright">
+          <LayersControl.BaseLayer checked name="Satellite">
+            <TileLayer
+              attribution="Tiles &copy; Esri"
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              maxZoom={19}
+            />
+          </LayersControl.BaseLayer>
+          <LayersControl.BaseLayer name="Plan (OpenStreetMap)">
+            <TileLayer
+              attribution="&copy; OpenStreetMap contributors"
+              url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+              maxZoom={19}
+            />
+          </LayersControl.BaseLayer>
+
           <LayersControl.Overlay name="Cadastre (France)">
             <TileLayer
               attribution="Cadastre &copy; IGN / DGFiP"

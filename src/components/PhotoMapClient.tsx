@@ -127,10 +127,13 @@ function toLightboxPhotos(members: MapPhoto[]): LightboxPhoto[] {
 const repositionIcon = L.divIcon({
   className: "",
   html: `
-    <div style="width:28px;height:28px;border-radius:50%;background:#ef4444;border:3px solid #ffffff;box-shadow:0 2px 8px rgba(0,0,0,0.5);cursor:grab;"></div>
+    <div style="position:relative;width:48px;height:48px;">
+      <div style="position:absolute;inset:0;border-radius:50%;background:rgba(239,68,68,0.35);animation:geolaky-pulse 1.4s ease-out infinite;"></div>
+      <div style="position:absolute;top:10px;left:10px;width:28px;height:28px;border-radius:50%;background:#ef4444;border:3px solid #ffffff;box-shadow:0 2px 10px rgba(0,0,0,0.6);cursor:grab;"></div>
+    </div>
   `,
-  iconSize: [28, 28],
-  iconAnchor: [14, 14],
+  iconSize: [48, 48],
+  iconAnchor: [24, 24],
 });
 
 /** Centre la carte sur le marqueur au moment ou le mode repositionnement demarre. */
@@ -238,7 +241,13 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
     );
   }, [photos, projectFilter, countryFilter]);
 
-  const mapPoints = useMemo(() => buildMapPoints(filteredPhotos), [filteredPhotos]);
+  // Masque la photo en cours de repositionnement parmi les marqueurs normaux :
+  // sinon son repere de deplacement (plus petit) se retrouve cache derriere
+  // sa propre vignette photo, au meme endroit.
+  const mapPoints = useMemo(() => {
+    const visible = reposition ? filteredPhotos.filter((p) => p.id !== reposition.photoId) : filteredPhotos;
+    return buildMapPoints(visible);
+  }, [filteredPhotos, reposition]);
 
   const hasFilter = Boolean(projectFilter || countryFilter);
 
@@ -317,13 +326,22 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
       </div>
 
       <MapContainer center={center} zoom={6} scrollWheelZoom className="h-full w-full">
-        <TileLayer
-          attribution="Tiles &copy; Esri"
-          url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-          maxZoom={19}
-        />
-
         <LayersControl position="topright">
+          <LayersControl.BaseLayer checked name="Satellite">
+            <TileLayer
+              attribution="Tiles &copy; Esri"
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              maxZoom={19}
+            />
+          </LayersControl.BaseLayer>
+          <LayersControl.BaseLayer name="Plan (OpenStreetMap)">
+            <TileLayer
+              attribution="&copy; OpenStreetMap contributors"
+              url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+              maxZoom={19}
+            />
+          </LayersControl.BaseLayer>
+
           <LayersControl.Overlay name="Cadastre (France)">
             <TileLayer
               attribution="Cadastre &copy; IGN / DGFiP"

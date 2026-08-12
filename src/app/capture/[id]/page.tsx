@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
-import { CaptureClient } from "@/components/CaptureClient";
+import { PhotoIntakeClient } from "@/components/PhotoIntakeClient";
 
 export default async function CapturePage({ params }: { params: { id: string } }) {
   const user = await getCurrentUser();
@@ -13,5 +13,5 @@ export default async function CapturePage({ params }: { params: { id: string } }
   });
   if (!project) notFound();
 
-  return <CaptureClient projectId={project.id} projectName={project.name} />;
+  return <PhotoIntakeClient projectId={project.id} projectName={project.name} />;
 }

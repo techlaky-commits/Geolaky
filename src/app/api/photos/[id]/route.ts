@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
-import { getOwnedPhoto } from "@/lib/authz";
+import { getOwnedPhoto, getOwnedProject } from "@/lib/authz";
 import { deleteProjectFile, overwriteProjectFile, readProjectFile } from "@/lib/storage";
 import { renderStampedImage, type CropData } from "@/lib/stamp";
 import { reverseGeocode } from "@/lib/geocode";
@@ -37,6 +37,7 @@ const updateSchema = z.object({
   address: z.string().trim().max(400).nullable().optional(),
   crop: cropSchema.nullable().optional(),
   position: positionSchema.optional(),
+  projectId: z.string().trim().min(1).optional(),
 });
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
@@ -72,11 +73,22 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     }
   }
 
+  let projectId = photo.projectId;
+  let projectName = photo.project.name;
+  if (parsed.data.projectId && parsed.data.projectId !== photo.projectId) {
+    const targetProject = await getOwnedProject(user.id, parsed.data.projectId);
+    if (!targetProject) {
+      return NextResponse.json({ error: "Projet de destination introuvable" }, { status: 404 });
+    }
+    projectId = targetProject.id;
+    projectName = targetProject.name;
+  }
+
   const originalBuffer = await readProjectFile(photo.originalPath);
   const stampedBuffer = await renderStampedImage(
     originalBuffer,
     {
-      title: photo.project.name,
+      title: projectName,
       address,
       latitude,
       longitude,
@@ -98,6 +110,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       latitude,
       longitude,
       accuracy,
+      projectId,
       cropData: crop ? JSON.stringify(crop) : null,
     },
   });

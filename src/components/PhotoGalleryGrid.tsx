@@ -3,7 +3,15 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Download, ExternalLink, ImageUp, Loader2, MapPinned, Trash2 } from "lucide-react";
+import {
+  Download,
+  ExternalLink,
+  FolderKanban,
+  ImageUp,
+  Loader2,
+  MapPinned,
+  Trash2,
+} from "lucide-react";
 import { ContextMenu, type ContextMenuItem } from "@/components/ContextMenu";
 
 type GalleryPhoto = {
@@ -86,6 +94,11 @@ export function PhotoGalleryGrid({
           label: "Modifier la position",
           icon: <MapPinned className="h-4 w-4" />,
           onClick: () => router.push(`/photos/${menu.photo.id}#emplacement`),
+        },
+        {
+          label: "Changer de projet",
+          icon: <FolderKanban className="h-4 w-4" />,
+          onClick: () => router.push(`/photos/${menu.photo.id}#projet`),
         },
         {
           label: "Remplacer la photo",

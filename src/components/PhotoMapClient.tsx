@@ -10,6 +10,9 @@ import { LayersControl, MapContainer, Marker, TileLayer, useMap } from "react-le
 import MarkerClusterGroup from "react-leaflet-cluster";
 import { Check, Loader2, MapPin, X } from "lucide-react";
 import { PhotoLightbox, type LightboxPhoto } from "@/components/PhotoLightbox";
+import { MapSearchBar } from "@/components/MapSearchBar";
+import { BulkEditBar } from "@/components/BulkEditBar";
+import { haversineDistanceMeters } from "@/lib/geo";
 
 type MapPhoto = {
   id: string;
@@ -75,18 +78,23 @@ function buildMapPoints(photos: MapPhoto[]): MapPoint[] {
   return points;
 }
 
-function photoIcon(url: string, count: number): DivIconWithMeta {
+function photoIcon(url: string, count: number, selected = false): DivIconWithMeta {
   const badge =
     count > 1
       ? `<div style="position:absolute;left:6px;bottom:3px;color:#ffffff;font-weight:700;font-size:15px;font-family:system-ui,sans-serif;text-shadow:0 1px 4px rgba(0,0,0,0.95);">${count}</div>`
       : "";
+  const checkBadge = selected
+    ? `<div style="position:absolute;right:3px;top:3px;width:18px;height:18px;border-radius:50%;background:#2563eb;border:2px solid #ffffff;display:flex;align-items:center;justify-content:center;color:#ffffff;font-size:11px;font-weight:700;">&#10003;</div>`
+    : "";
   const size = count > 1 ? 64 : 56;
+  const border = selected ? "3px solid #2563eb" : "2.5px solid #ffffff";
   const icon = L.divIcon({
     className: "",
     html: `
-      <div style="position:relative;width:${size}px;height:${size}px;border-radius:14px;overflow:hidden;border:2.5px solid #ffffff;box-shadow:0 2px 8px rgba(0,0,0,0.45);">
+      <div style="position:relative;width:${size}px;height:${size}px;border-radius:14px;overflow:hidden;border:${border};box-shadow:0 2px 8px rgba(0,0,0,0.45);">
         <img src="${url}" style="width:100%;height:100%;object-fit:cover;display:block;" />
         ${badge}
+        ${checkBadge}
       </div>
     `,
     iconSize: [size, size],
@@ -166,6 +174,27 @@ function RepositionMarker({
   );
 }
 
+type FlyTarget =
+  | { kind: "point"; center: [number, number]; zoom: number }
+  | { kind: "bounds"; bounds: [[number, number], [number, number]] };
+
+/** Deplace la carte vers un resultat de recherche (point isole ou groupe de photos). */
+function MapController({ target }: { target: FlyTarget | null }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!target) return;
+    if (target.kind === "bounds") {
+      map.flyToBounds(target.bounds, { padding: [60, 60], maxZoom: 17, duration: 0.6 });
+    } else {
+      map.flyTo(target.center, target.zoom, { duration: 0.6 });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target]);
+
+  return null;
+}
+
 const IGN_WMTS_BASE = "https://data.geopf.fr/wmts?SERVICE=WMTS&VERSION=1.0.0&REQUEST=GetTile";
 
 export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string }) {
@@ -181,6 +210,10 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
   } | null>(null);
   const [savingPosition, setSavingPosition] = useState(false);
   const [positionError, setPositionError] = useState<string | null>(null);
+  const [flyTarget, setFlyTarget] = useState<FlyTarget | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
 
   const loadPhotos = () => {
     fetch("/api/photos/map")
@@ -213,6 +246,92 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
       setPositionError("Impossible d'enregistrer la nouvelle position.");
     } finally {
       setSavingPosition(false);
+    }
+  }
+
+  /** Bascule la selection d'un point (photo isolee ou lot) en un seul geste. */
+  function toggleSelection(point: MapPoint) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      const allSelected = point.members.every((m) => prev.has(m.id));
+      for (const m of point.members) {
+        if (allSelected) next.delete(m.id);
+        else next.add(m.id);
+      }
+      return next;
+    });
+  }
+
+  /** Recherche independante des filtres : cherche parmi TOUTES les photos
+   * (pas seulement celles actuellement affichees), centre la carte sur le
+   * resultat et ouvre la visionneuse pour montrer les photos correspondantes. */
+  function locateProject(projectId: string) {
+    if (!photos) return;
+    const matches = photos.filter((p) => p.projectId === projectId);
+    if (matches.length === 0) return;
+    focusMatches(matches);
+  }
+
+  function locateAddress(latitude: number, longitude: number) {
+    if (!photos) return;
+    const nearby = photos
+      .filter((p) => haversineDistanceMeters({ latitude, longitude }, p) <= 300)
+      .sort(
+        (a, b) =>
+          haversineDistanceMeters({ latitude, longitude }, a) -
+          haversineDistanceMeters({ latitude, longitude }, b),
+      );
+
+    if (nearby.length === 0) {
+      setFlyTarget({ kind: "point", center: [latitude, longitude], zoom: 16 });
+      return;
+    }
+    focusMatches(nearby);
+  }
+
+  function focusMatches(matches: MapPhoto[]) {
+    if (matches.length === 1) {
+      const [only] = matches;
+      setFlyTarget({ kind: "point", center: [only.latitude, only.longitude], zoom: 17 });
+    } else {
+      const lats = matches.map((m) => m.latitude);
+      const lngs = matches.map((m) => m.longitude);
+      setFlyTarget({
+        kind: "bounds",
+        bounds: [
+          [Math.min(...lats), Math.min(...lngs)],
+          [Math.max(...lats), Math.max(...lngs)],
+        ],
+      });
+    }
+    setLightboxPoint({
+      key: "search-result",
+      latitude: matches[0].latitude,
+      longitude: matches[0].longitude,
+      coverUrl: `/api/files/${matches[0].stampedPath}`,
+      members: matches,
+    });
+  }
+
+  async function runBulkPatch(body: Record<string, unknown>) {
+    setBulkBusy(true);
+    setBulkError(null);
+    const ids = Array.from(selectedIds);
+    try {
+      for (const id of ids) {
+        const res = await fetch(`/api/photos/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error("bulk update failed");
+      }
+      setSelectedIds(new Set());
+      loadPhotos();
+    } catch {
+      setBulkError("Certaines modifications n'ont pas pu etre appliquees.");
+    } finally {
+      setBulkBusy(false);
     }
   }
 
@@ -280,49 +399,57 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
 
   return (
     <div className="relative h-full min-h-[70vh] w-full">
-      <div className="absolute left-3 top-3 z-[1000] flex flex-wrap items-center gap-2 rounded-lg bg-white/95 p-2 shadow-md backdrop-blur">
-        <select
-          value={projectFilter}
-          onChange={(e) => setProjectFilter(e.target.value)}
-          className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
-        >
-          <option value="">Tous les projets</option>
-          {projectOptions.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
+      <div className="absolute left-3 top-3 z-[1000] flex flex-wrap items-start gap-3">
+        <MapSearchBar
+          projects={projectOptions}
+          onSelectProject={locateProject}
+          onSelectLocation={locateAddress}
+        />
 
-        <select
-          value={countryFilter}
-          onChange={(e) => setCountryFilter(e.target.value)}
-          className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
-        >
-          <option value="">Tous les pays</option>
-          {countryOptions.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-
-        {hasFilter && (
-          <button
-            onClick={() => {
-              setProjectFilter("");
-              setCountryFilter("");
-            }}
-            className="flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+        <div className="flex flex-wrap items-center gap-2 rounded-lg bg-white/95 p-2 shadow-md backdrop-blur">
+          <select
+            value={projectFilter}
+            onChange={(e) => setProjectFilter(e.target.value)}
+            className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
           >
-            <X className="h-3.5 w-3.5" />
-            Reinitialiser
-          </button>
-        )}
+            <option value="">Tous les projets</option>
+            {projectOptions.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
 
-        <span className="px-1 text-sm text-slate-500">
-          {filteredPhotos.length} photo{filteredPhotos.length > 1 ? "s" : ""}
-        </span>
+          <select
+            value={countryFilter}
+            onChange={(e) => setCountryFilter(e.target.value)}
+            className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+          >
+            <option value="">Tous les pays</option>
+            {countryOptions.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+
+          {hasFilter && (
+            <button
+              onClick={() => {
+                setProjectFilter("");
+                setCountryFilter("");
+              }}
+              className="flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+            >
+              <X className="h-3.5 w-3.5" />
+              Reinitialiser
+            </button>
+          )}
+
+          <span className="px-1 text-sm text-slate-500">
+            {filteredPhotos.length} photo{filteredPhotos.length > 1 ? "s" : ""}
+          </span>
+        </div>
       </div>
 
       <MapContainer center={center} zoom={6} scrollWheelZoom className="h-full w-full">
@@ -385,14 +512,26 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
             return clusterIcon(firstUrl, totalCount);
           }}
         >
-          {mapPoints.map((point) => (
-            <Marker
-              key={point.key}
-              position={[point.latitude, point.longitude]}
-              icon={photoIcon(point.coverUrl, point.members.length)}
-              eventHandlers={{ click: () => setLightboxPoint(point) }}
-            />
-          ))}
+          {mapPoints.map((point) => {
+            const selected = point.members.every((m) => selectedIds.has(m.id));
+            return (
+              <Marker
+                key={point.key}
+                position={[point.latitude, point.longitude]}
+                icon={photoIcon(point.coverUrl, point.members.length, selected)}
+                eventHandlers={{
+                  click: (e) => {
+                    const native = e.originalEvent as MouseEvent | undefined;
+                    if (native?.ctrlKey || native?.metaKey) {
+                      toggleSelection(point);
+                    } else {
+                      setLightboxPoint(point);
+                    }
+                  },
+                }}
+              />
+            );
+          })}
         </MarkerClusterGroup>
 
         {reposition && (
@@ -403,6 +542,8 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
             }
           />
         )}
+
+        <MapController target={flyTarget} />
       </MapContainer>
 
       {reposition && (
@@ -437,6 +578,18 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
             </button>
           </div>
         </div>
+      )}
+
+      {!reposition && selectedIds.size > 0 && (
+        <BulkEditBar
+          count={selectedIds.size}
+          busy={bulkBusy}
+          error={bulkError}
+          onClear={() => setSelectedIds(new Set())}
+          onApplyProject={(id) => runBulkPatch({ projectId: id })}
+          onApplyAddress={(address) => runBulkPatch({ address: address || null })}
+          onApplyNote={(note) => runBulkPatch({ note: note || null })}
+        />
       )}
 
       {lightboxPoint && (

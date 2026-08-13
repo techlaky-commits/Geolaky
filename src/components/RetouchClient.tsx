@@ -5,8 +5,11 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Cropper, { type Area } from "react-easy-crop";
+import { parseCoordsInput } from "@/lib/geo";
+import { ProjectPicker } from "@/components/ProjectPicker";
 import {
   Download,
+  FolderKanban,
   ImageUp,
   Loader2,
   MapPinned,
@@ -49,15 +52,6 @@ const ASPECT_OPTIONS = [
 
 const DEFAULT_POSITION = { latitude: 48.8566, longitude: 2.3522 }; // Paris, si aucune position n'est definie
 
-function parsePastedCoords(input: string): { latitude: number; longitude: number } | null {
-  const match = input.trim().match(/(-?\d+(?:\.\d+)?)\s*[,;\s]\s*(-?\d+(?:\.\d+)?)/);
-  if (!match) return null;
-  const latitude = Number(match[1]);
-  const longitude = Number(match[2]);
-  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return null;
-  return { latitude, longitude };
-}
-
 export function RetouchClient({ photo }: { photo: PhotoData }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -80,6 +74,7 @@ export function RetouchClient({ photo }: { photo: PhotoData }) {
 
   const [address, setAddress] = useState(photo.address ?? "");
   const [note, setNote] = useState(photo.note ?? "");
+  const [projectId, setProjectId] = useState(photo.projectId);
   const [position, setPosition] = useState(originalPosition);
   const [pasteCoords, setPasteCoords] = useState("");
   const [editingCrop, setEditingCrop] = useState(searchParams.get("edit") === "crop");
@@ -111,7 +106,7 @@ export function RetouchClient({ photo }: { photo: PhotoData }) {
       position.longitude !== originalPosition.longitude);
 
   function applyPastedCoords() {
-    const parsed = parsePastedCoords(pasteCoords);
+    const parsed = parseCoordsInput(pasteCoords);
     if (!parsed) {
       setError("Format de coordonnees invalide. Exemple : 48.858370, 2.294481");
       return;
@@ -132,6 +127,7 @@ export function RetouchClient({ photo }: { photo: PhotoData }) {
           address: address.trim() || null,
           note: note.trim() || null,
           position: positionChanged ? position : undefined,
+          projectId: projectId !== photo.projectId ? projectId : undefined,
           crop: editingCrop && croppedAreaPixels
             ? {
                 x: croppedAreaPixels.x,
@@ -332,6 +328,17 @@ export function RetouchClient({ photo }: { photo: PhotoData }) {
             className="w-full rounded-md border border-slate-300 px-3 py-2"
           />
         </div>
+      </div>
+
+      <div id="projet" className="mt-4 space-y-2 rounded-xl border border-slate-200 bg-white p-4">
+        <h2 className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+          <FolderKanban className="h-4 w-4" />
+          Projet
+        </h2>
+        <p className="text-xs text-slate-500">
+          Deplacez cette photo vers un autre projet existant, ou creez-en un nouveau.
+        </p>
+        <ProjectPicker value={projectId} onChange={(id) => setProjectId(id)} />
       </div>
 
       <div id="emplacement" className="mt-4 space-y-3 rounded-xl border border-slate-200 bg-white p-4">

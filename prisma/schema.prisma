@@ -31,6 +31,11 @@ model Project {
   // Graph/SharePoint n'est enregistree pour ce compte (voir README).
   sharePointUrl String?
 
+  // Vignette de couverture affichee sur la liste des projets (Home). Chemin
+  // relatif sous STORAGE_DIR, servi via /api/files/[...path]. Null tant
+  // qu'aucune image n'a ete ajoutee.
+  coverPhotoPath String?
+
   ownerId     String
   owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   photos      Photo[]

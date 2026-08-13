@@ -1,4 +1,4 @@
-# Geolaky
+# LakyMaps
 
 Application de photos geolocalisees pour visites de site (type SoloCator) :
 prise de photo sur mobile (PWA) avec horodatage + position GPS tamponnes sur
@@ -75,7 +75,7 @@ hebergeur offrant un disque persistant. Etapes pour Railway :
    - `STORAGE_DIR=/data/storage`
    - `NEXTAUTH_SECRET=<valeur generee via: openssl rand -base64 32>`
    - `NEXTAUTH_URL=https://<le-domaine-fourni-par-railway>`
-   - `NOMINATIM_USER_AGENT=Geolaky/1.0 (ton-email@exemple.com)`
+   - `NOMINATIM_USER_AGENT=LakyMaps/1.0 (ton-email@exemple.com)`
 4. Redeployer si besoin (*Deployments* -> *Redeploy*) une fois les variables
    posees. Le script `start` (`prisma migrate deploy && next start`) applique
    les migrations automatiquement au demarrage.

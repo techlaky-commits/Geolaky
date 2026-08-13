@@ -15,7 +15,7 @@ const MAX_DIMENSION = 1280;
 const CRF = 28;
 
 async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
-  const dir = await mkdtemp(path.join(tmpdir(), "geolaky-video-"));
+  const dir = await mkdtemp(path.join(tmpdir(), "lakymaps-video-"));
   try {
     return await fn(dir);
   } finally {

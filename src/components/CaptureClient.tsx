@@ -24,6 +24,7 @@ type Shot = {
   previewUrl: string;
   capturedAt: Date;
   coords: Coords | null;
+  direction: number | null;
   status: "pending" | "uploading" | "done" | "error";
 };
 
@@ -84,19 +85,39 @@ export function CaptureClient({
       const file = e.target.files?.[0];
       e.target.value = "";
       if (!file) return;
+      const id = makeId();
       setShots((prev) => [
         ...prev,
         {
-          id: makeId(),
+          id,
           file,
           previewUrl: URL.createObjectURL(file),
           capturedAt: new Date(),
           coords: geo,
+          direction: null,
           status: "pending",
         },
       ]);
+
+      // Le telephone embarque parfois le cap de la boussole (GPSImgDirection)
+      // dans l'EXIF de la photo au moment de la prise - a defaut, seule la
+      // position (watchPosition) est disponible, sans orientation.
+      if (!isVideoMode) {
+        (async () => {
+          try {
+            const exifr = await import("exifr");
+            const tags = await exifr.parse(file, { pick: ["GPSImgDirection"] }).catch(() => null);
+            const direction = typeof tags?.GPSImgDirection === "number" ? tags.GPSImgDirection : null;
+            if (direction !== null) {
+              setShots((prev) => prev.map((s) => (s.id === id ? { ...s, direction } : s)));
+            }
+          } catch {
+            // pas de metadonnee de direction disponible : la photo restera sans fleche sur la carte
+          }
+        })();
+      }
     },
-    [geo],
+    [geo, isVideoMode],
   );
 
   function removeShot(id: string) {
@@ -133,6 +154,7 @@ export function CaptureClient({
         form.append("longitude", String(shot.coords.longitude));
         form.append("accuracy", String(shot.coords.accuracy));
       }
+      if (shot.direction !== null) form.append("direction", String(shot.direction));
       if (note.trim()) form.append("note", note.trim());
       if (groupId) form.append("groupId", groupId);
 

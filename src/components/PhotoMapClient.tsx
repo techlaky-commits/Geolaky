@@ -102,7 +102,7 @@ function photoIcon(url: string, count: number, isVideo: boolean, direction: numb
       ? `<div style="position:absolute;left:6px;bottom:3px;color:#ffffff;font-weight:700;font-size:15px;font-family:system-ui,sans-serif;text-shadow:0 1px 4px rgba(0,0,0,0.95);">${count}</div>`
       : "";
   const checkBadge = selected
-    ? `<div style="position:absolute;right:3px;top:3px;width:18px;height:18px;border-radius:50%;background:#2563eb;border:2px solid #ffffff;display:flex;align-items:center;justify-content:center;color:#ffffff;font-size:11px;font-weight:700;">&#10003;</div>`
+    ? `<div style="position:absolute;right:3px;top:3px;width:18px;height:18px;border-radius:50%;background:#f39815;border:2px solid #ffffff;display:flex;align-items:center;justify-content:center;color:#ffffff;font-size:11px;font-weight:700;">&#10003;</div>`
     : "";
   const playBadge =
     isVideo && count === 1
@@ -113,13 +113,13 @@ function photoIcon(url: string, count: number, isVideo: boolean, direction: numb
         </div>`
       : "";
   const size = count > 1 ? 64 : 56;
-  const border = selected ? "3px solid #2563eb" : "2.5px solid #ffffff";
+  const border = selected ? "3px solid #f39815" : "2.5px solid #ffffff";
   // La fleche part du bord du marqueur et pointe dans la direction de prise
   // de vue (0deg = Nord = vers le haut, sens horaire, comme un cap boussole).
   const arrow =
     direction !== null
       ? `<div style="position:absolute;left:50%;top:50%;width:0;height:0;transform:translate(-50%,-100%) rotate(${direction}deg);transform-origin:50% 100%;">
-          <div style="width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:22px solid #2563eb;margin-top:-${size / 2 + 20}px;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));"></div>
+          <div style="width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:22px solid #006f9c;margin-top:-${size / 2 + 20}px;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));"></div>
         </div>`
       : "";
   const icon = L.divIcon({
@@ -168,6 +168,7 @@ function toLightboxPhotos(members: MapPhoto[]): LightboxPhoto[] {
     latitude: m.latitude,
     longitude: m.longitude,
     mediaType: m.mediaType,
+    direction: m.direction,
   }));
 }
 
@@ -175,7 +176,7 @@ const repositionIcon = L.divIcon({
   className: "",
   html: `
     <div style="position:relative;width:48px;height:48px;">
-      <div style="position:absolute;inset:0;border-radius:50%;background:rgba(239,68,68,0.35);animation:geolaky-pulse 1.4s ease-out infinite;"></div>
+      <div style="position:absolute;inset:0;border-radius:50%;background:rgba(239,68,68,0.35);animation:lakymaps-pulse 1.4s ease-out infinite;"></div>
       <div style="position:absolute;top:10px;left:10px;width:28px;height:28px;border-radius:50%;background:#ef4444;border:3px solid #ffffff;box-shadow:0 2px 10px rgba(0,0,0,0.6);cursor:grab;"></div>
     </div>
   `,

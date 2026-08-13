@@ -10,7 +10,7 @@ const pinIcon = L.divIcon({
   className: "",
   html: `
     <div style="position:relative;width:44px;height:44px;">
-      <div style="position:absolute;inset:0;border-radius:50%;background:rgba(239,68,68,0.35);animation:geolaky-pulse 1.4s ease-out infinite;"></div>
+      <div style="position:absolute;inset:0;border-radius:50%;background:rgba(239,68,68,0.35);animation:lakymaps-pulse 1.4s ease-out infinite;"></div>
       <div style="position:absolute;top:8px;left:8px;width:28px;height:28px;border-radius:50%;background:#ef4444;border:3px solid #ffffff;box-shadow:0 2px 10px rgba(0,0,0,0.6);cursor:grab;"></div>
     </div>
   `,

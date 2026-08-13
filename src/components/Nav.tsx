@@ -20,7 +20,7 @@ export function Nav() {
         <div className="flex items-center gap-1">
           <Link href="/projects" className="mr-3 flex items-center gap-2 font-semibold text-brand-700">
             <MapPin className="h-5 w-5" />
-            Geolaky
+            LakyMaps
           </Link>
           {session?.user &&
             TABS.map((tab) => {

@@ -33,7 +33,7 @@ export default function LoginPage() {
     <div className="mx-auto mt-10 max-w-sm">
       <div className="mb-6 flex flex-col items-center gap-2 text-brand-700">
         <MapPin className="h-8 w-8" />
-        <h1 className="text-xl font-semibold">Connexion a Geolaky</h1>
+        <h1 className="text-xl font-semibold">Connexion a LakyMaps</h1>
       </div>
 
       <form onSubmit={onSubmit} className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">

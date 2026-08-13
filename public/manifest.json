@@ -1,12 +1,12 @@
 {
-  "name": "Geolaky",
-  "short_name": "Geolaky",
+  "name": "LakyMaps",
+  "short_name": "LakyMaps",
   "description": "Photos geolocalisees pour visites de site",
   "start_url": "/projects",
   "scope": "/",
   "display": "standalone",
   "background_color": "#f4f6fb",
-  "theme_color": "#1f7aec",
+  "theme_color": "#006f9c",
   "orientation": "portrait-primary",
   "icons": [
     { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },

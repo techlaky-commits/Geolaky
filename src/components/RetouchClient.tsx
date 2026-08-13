@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Cropper, { type Area } from "react-easy-crop";
-import { parseCoordsInput } from "@/lib/geo";
+import { compassLabel, parseCoordsInput } from "@/lib/geo";
 import { ProjectPicker } from "@/components/ProjectPicker";
 import {
   ChevronLeft,
@@ -46,6 +46,7 @@ type PhotoData = {
   cropData: string | null;
   mediaType: string;
   durationSeconds: number | null;
+  direction: number | null;
 };
 
 type NavigationInfo = {
@@ -473,8 +474,24 @@ export function RetouchClient({ photo, navigation }: { photo: PhotoData; navigat
         </div>
       )}
 
-      {isVideo && photo.durationSeconds ? (
-        <p className="mt-2 text-xs text-slate-500">Duree : {Math.round(photo.durationSeconds)} s</p>
+      {(isVideo && photo.durationSeconds) || photo.direction !== null ? (
+        <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+          {isVideo && photo.durationSeconds ? <span>Duree : {Math.round(photo.durationSeconds)} s</span> : null}
+          {photo.direction !== null && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-600">
+              <span
+                className="inline-block h-0 w-0"
+                style={{
+                  borderLeft: "4.5px solid transparent",
+                  borderRight: "4.5px solid transparent",
+                  borderBottom: "8px solid #006f9c",
+                  transform: `rotate(${photo.direction}deg)`,
+                }}
+              />
+              Orientation : {compassLabel(photo.direction)} ({Math.round(photo.direction)}°)
+            </span>
+          )}
+        </div>
       ) : null}
 
       <div className="mt-4 flex flex-wrap gap-4">

@@ -37,6 +37,7 @@ export default async function PhotoPage({ params }: { params: { id: string } }) 
         cropData: photo.cropData,
         mediaType: photo.mediaType,
         durationSeconds: photo.durationSeconds,
+        direction: photo.direction,
       }}
       navigation={
         total > 1

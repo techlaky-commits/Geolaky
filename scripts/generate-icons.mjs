@@ -10,7 +10,7 @@ function iconSvg(size, { padded } = {}) {
   const cy = size / 2;
   return `
     <svg width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
-      <rect width="${size}" height="${size}" fill="#1f7aec" />
+      <rect width="${size}" height="${size}" fill="#006f9c" />
       <g transform="translate(${cx}, ${cy - pin * 0.08})">
         <path d="M0 ${-pin * 0.42}
                  C ${pin * 0.28} ${-pin * 0.42} ${pin * 0.42} ${-pin * 0.12} ${pin * 0.42} ${pin * 0.1}
@@ -18,7 +18,7 @@ function iconSvg(size, { padded } = {}) {
                  C 0 ${pin * 0.62} ${-pin * 0.42} ${pin * 0.42} ${-pin * 0.42} ${pin * 0.1}
                  C ${-pin * 0.42} ${-pin * 0.12} ${-pin * 0.28} ${-pin * 0.42} 0 ${-pin * 0.42} Z"
               fill="#ffffff" />
-        <circle cx="0" cy="${-pin * 0.08}" r="${pin * 0.16}" fill="#1f7aec" />
+        <circle cx="0" cy="${-pin * 0.08}" r="${pin * 0.16}" fill="#006f9c" />
       </g>
     </svg>
   `.trim();

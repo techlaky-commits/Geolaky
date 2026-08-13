@@ -1,5 +1,23 @@
 export type LatLng = { latitude: number; longitude: number };
 
+const COMPASS_LABELS = [
+  "Nord",
+  "Nord-Est",
+  "Est",
+  "Sud-Est",
+  "Sud",
+  "Sud-Ouest",
+  "Ouest",
+  "Nord-Ouest",
+];
+
+/** Convertit un cap en degres (0-360, 0 = Nord, sens horaire) en libelle cardinal (8 directions). */
+export function compassLabel(degrees: number): string {
+  const normalized = ((degrees % 360) + 360) % 360;
+  const index = Math.round(normalized / 45) % 8;
+  return COMPASS_LABELS[index];
+}
+
 /** Parse un texte de coordonnees GPS collees, ex: "48.858370, 2.294481". */
 export function parseCoordsInput(input: string): LatLng | null {
   const match = input.trim().match(/^(-?\d+(?:\.\d+)?)\s*[,;\s]\s*(-?\d+(?:\.\d+)?)$/);

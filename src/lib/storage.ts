@@ -20,7 +20,7 @@ export function resolveStoragePath(relativePath: string) {
 export async function saveProjectFile(
   projectId: string,
   buffer: Buffer,
-  kind: "original" | "stamped",
+  kind: "original" | "stamped" | "cover",
   ext = "jpg",
 ) {
   const dir = projectDir(projectId);

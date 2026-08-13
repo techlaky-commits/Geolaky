@@ -1,14 +1,15 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil } from "lucide-react";
+import { ImagePlus, Loader2, Pencil, Trash2 } from "lucide-react";
 
 type Project = {
   id: string;
   name: string;
   address: string | null;
   sharePointUrl: string | null;
+  coverPhotoPath: string | null;
 };
 
 export function EditProjectForm({ project }: { project: Project }) {
@@ -17,8 +18,12 @@ export function EditProjectForm({ project }: { project: Project }) {
   const [name, setName] = useState(project.name);
   const [address, setAddress] = useState(project.address ?? "");
   const [sharePointUrl, setSharePointUrl] = useState(project.sharePointUrl ?? "");
+  const [coverPhotoPath, setCoverPhotoPath] = useState(project.coverPhotoPath);
+  const [coverVersion, setCoverVersion] = useState(0);
+  const [coverBusy, setCoverBusy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const coverInputRef = useRef<HTMLInputElement>(null);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -45,6 +50,45 @@ export function EditProjectForm({ project }: { project: Project }) {
     router.refresh();
   }
 
+  async function onCoverFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    setCoverBusy(true);
+    setError(null);
+    const form = new FormData();
+    form.append("file", file);
+    try {
+      const res = await fetch(`/api/projects/${project.id}/cover`, { method: "POST", body: form });
+      if (!res.ok) throw new Error("cover upload failed");
+      const data = await res.json();
+      setCoverPhotoPath(data.project.coverPhotoPath);
+      setCoverVersion((v) => v + 1);
+      router.refresh();
+    } catch {
+      setError("Impossible d'enregistrer la vignette.");
+    } finally {
+      setCoverBusy(false);
+    }
+  }
+
+  async function removeCover() {
+    if (!confirm("Supprimer la vignette de ce projet ?")) return;
+    setCoverBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/projects/${project.id}/cover`, { method: "DELETE" });
+      if (!res.ok) throw new Error("cover delete failed");
+      setCoverPhotoPath(null);
+      router.refresh();
+    } catch {
+      setError("Impossible de supprimer la vignette.");
+    } finally {
+      setCoverBusy(false);
+    }
+  }
+
   if (!open) {
     return (
       <button
@@ -63,6 +107,54 @@ export function EditProjectForm({ project }: { project: Project }) {
       className="mb-6 w-full space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
     >
       <h2 className="text-sm font-semibold text-slate-900">Parametres du projet</h2>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium text-slate-700">Vignette du projet</label>
+        <div className="flex items-center gap-3">
+          <div className="flex h-20 w-32 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-slate-100">
+            {coverPhotoPath ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={`/api/files/${coverPhotoPath}?v=${coverVersion}`}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <ImagePlus className="h-6 w-6 text-slate-300" />
+            )}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <input
+              ref={coverInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={onCoverFileSelected}
+            />
+            <button
+              type="button"
+              onClick={() => coverInputRef.current?.click()}
+              disabled={coverBusy}
+              className="flex items-center gap-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+            >
+              {coverBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />}
+              {coverPhotoPath ? "Changer l'image" : "Ajouter une image"}
+            </button>
+            {coverPhotoPath && (
+              <button
+                type="button"
+                onClick={removeCover}
+                disabled={coverBusy}
+                className="flex items-center gap-1 rounded-md border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-60"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Supprimer l&apos;image
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       <div>
         <label className="mb-1 block text-sm font-medium text-slate-700">Nom du projet / site</label>
         <input

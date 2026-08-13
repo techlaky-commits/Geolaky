@@ -10,6 +10,17 @@ body {
 body {
   background-color: #f4f6fb;
   color: #0f172a;
+  font-family: var(--font-mulish), ui-sans-serif, system-ui, sans-serif;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-raleway), ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
 }
 
 input,
@@ -25,7 +36,7 @@ textarea {
 }
 
 /* Halo du repere de repositionnement (carte + mini-carte de position) */
-@keyframes geolaky-pulse {
+@keyframes lakymaps-pulse {
   0% {
     transform: scale(0.6);
     opacity: 0.8;

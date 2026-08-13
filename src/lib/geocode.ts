@@ -31,7 +31,7 @@ export async function reverseGeocode(
 
     const res = await fetch(url, {
       headers: {
-        "User-Agent": process.env.NOMINATIM_USER_AGENT || "Geolaky/0.1",
+        "User-Agent": process.env.NOMINATIM_USER_AGENT || "LakyMaps/0.1",
         Accept: "application/json",
       },
       signal: controller.signal,
@@ -69,7 +69,7 @@ export async function forwardGeocode(query: string): Promise<ForwardGeocodeMatch
 
     const res = await fetch(url, {
       headers: {
-        "User-Agent": process.env.NOMINATIM_USER_AGENT || "Geolaky/0.1",
+        "User-Agent": process.env.NOMINATIM_USER_AGENT || "LakyMaps/0.1",
         Accept: "application/json",
       },
       signal: controller.signal,

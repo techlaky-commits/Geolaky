@@ -51,6 +51,7 @@ export async function DELETE(_request: Request, { params }: { params: { id: stri
   await Promise.all(
     photos.flatMap((p) => [deleteProjectFile(p.originalPath), deleteProjectFile(p.stampedPath)]),
   );
+  if (existing.coverPhotoPath) await deleteProjectFile(existing.coverPhotoPath);
   await prisma.project.delete({ where: { id: params.id } });
 
   return NextResponse.json({ ok: true });

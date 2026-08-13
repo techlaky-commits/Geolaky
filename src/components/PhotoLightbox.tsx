@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, ExternalLink, MapPinned, Trash2, X } from "lucide-react";
+import { compassLabel } from "@/lib/geo";
 
 export type LightboxPhoto = {
   id: string;
@@ -14,6 +15,7 @@ export type LightboxPhoto = {
   latitude: number;
   longitude: number;
   mediaType?: string;
+  direction?: number | null;
 };
 
 function formatDateTime(iso: string) {
@@ -140,6 +142,20 @@ export function PhotoLightbox({
         <p className="text-sm font-semibold">{current.projectName}</p>
         {current.address && <p className="text-sm text-white/80">{current.address}</p>}
         <p className="text-xs text-white/60">{formatDateTime(current.capturedAt)}</p>
+        {typeof current.direction === "number" && (
+          <p className="flex items-center gap-1.5 text-xs text-white/60">
+            <span
+              className="inline-block h-0 w-0"
+              style={{
+                borderLeft: "4px solid transparent",
+                borderRight: "4px solid transparent",
+                borderBottom: "7px solid #ffffff",
+                transform: `rotate(${current.direction}deg)`,
+              }}
+            />
+            Orientation : {compassLabel(current.direction)} ({Math.round(current.direction)}°)
+          </p>
+        )}
         {current.note && <p className="text-sm italic text-white/80">{current.note}</p>}
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <Link

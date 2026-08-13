@@ -71,6 +71,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
             name: project.name,
             address: project.address,
             sharePointUrl: project.sharePointUrl,
+            coverPhotoPath: project.coverPhotoPath,
           }}
         />
       </div>

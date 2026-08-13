@@ -20,6 +20,7 @@ const createSchema = z.object({
   name: z.string().trim().min(1).max(200),
   address: z.string().trim().max(400).optional(),
   description: z.string().trim().max(2000).optional(),
+  sharePointUrl: z.string().trim().max(1000).optional(),
 });
 
 export async function POST(request: Request) {

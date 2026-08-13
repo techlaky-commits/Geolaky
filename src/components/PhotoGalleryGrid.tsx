@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   Download,
   ExternalLink,
+  Film,
   FolderKanban,
   ImageUp,
   Loader2,
@@ -18,6 +19,7 @@ type GalleryPhoto = {
   id: string;
   stampedPath: string;
   address: string | null;
+  mediaType: string;
 };
 
 export function PhotoGalleryGrid({
@@ -34,7 +36,7 @@ export function PhotoGalleryGrid({
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const replaceTargetRef = useRef<string | null>(null);
+  const replaceTargetRef = useRef<GalleryPhoto | null>(null);
 
   function openMenu(e: React.MouseEvent, photo: GalleryPhoto) {
     e.preventDefault();
@@ -51,7 +53,7 @@ export function PhotoGalleryGrid({
   }
 
   async function deletePhoto(photo: GalleryPhoto) {
-    if (!confirm("Supprimer definitivement cette photo ?")) return;
+    if (!confirm("Supprimer definitivement cet element ?")) return;
     setBusyId(photo.id);
     try {
       const res = await fetch(`/api/photos/${photo.id}`, { method: "DELETE" });
@@ -62,22 +64,22 @@ export function PhotoGalleryGrid({
   }
 
   function triggerReplace(photo: GalleryPhoto) {
-    replaceTargetRef.current = photo.id;
+    replaceTargetRef.current = photo;
     fileInputRef.current?.click();
   }
 
   async function onReplaceFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = "";
-    const photoId = replaceTargetRef.current;
-    if (!file || !photoId) return;
+    const photo = replaceTargetRef.current;
+    if (!file || !photo) return;
 
-    setBusyId(photoId);
+    setBusyId(photo.id);
     const form = new FormData();
     form.append("file", file);
     try {
-      const res = await fetch(`/api/photos/${photoId}/replace`, { method: "POST", body: form });
-      if (res.ok) setVersions((v) => ({ ...v, [photoId]: (v[photoId] ?? 0) + 1 }));
+      const res = await fetch(`/api/photos/${photo.id}/replace`, { method: "POST", body: form });
+      if (res.ok) setVersions((v) => ({ ...v, [photo.id]: (v[photo.id] ?? 0) + 1 }));
     } finally {
       setBusyId(null);
     }
@@ -101,7 +103,7 @@ export function PhotoGalleryGrid({
           onClick: () => router.push(`/photos/${menu.photo.id}#projet`),
         },
         {
-          label: "Remplacer la photo",
+          label: menu.photo.mediaType === "video" ? "Remplacer la video" : "Remplacer la photo",
           icon: <ImageUp className="h-4 w-4" />,
           onClick: () => triggerReplace(menu.photo),
         },
@@ -124,7 +126,7 @@ export function PhotoGalleryGrid({
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        accept={replaceTargetRef.current?.mediaType === "video" ? "video/*" : "image/*"}
         className="hidden"
         onChange={onReplaceFileSelected}
       />
@@ -143,6 +145,13 @@ export function PhotoGalleryGrid({
                 alt={photo.address || projectName}
                 className="aspect-square w-full object-cover transition group-hover:opacity-90"
               />
+              {photo.mediaType === "video" && (
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-black/10">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-black/55">
+                    <Film className="h-4 w-4 text-white" />
+                  </div>
+                </div>
+              )}
             </Link>
             {busyId === photo.id && (
               <div className="absolute inset-0 flex items-center justify-center bg-white/70">

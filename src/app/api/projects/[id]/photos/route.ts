@@ -6,6 +6,7 @@ import { getOwnedProject } from "@/lib/authz";
 import { saveProjectFile } from "@/lib/storage";
 import { reverseGeocode } from "@/lib/geocode";
 import { normalizeImage, renderStampedImage } from "@/lib/stamp";
+import { compressVideo, getVideoDurationSeconds } from "@/lib/video";
 
 export const runtime = "nodejs";
 
@@ -16,6 +17,7 @@ const fieldsSchema = z.object({
   capturedAt: z.coerce.date().optional(),
   note: z.string().trim().max(1000).optional(),
   groupId: z.string().trim().min(1).max(60).optional(),
+  direction: z.coerce.number().min(0).max(360).optional(),
 });
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
@@ -30,10 +32,12 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
   const file = form.get("file");
   if (!(file instanceof File)) {
-    return NextResponse.json({ error: "Fichier image manquant" }, { status: 400 });
+    return NextResponse.json({ error: "Fichier manquant" }, { status: 400 });
   }
-  if (!file.type.startsWith("image/")) {
-    return NextResponse.json({ error: "Le fichier doit etre une image" }, { status: 400 });
+  const isVideo = file.type.startsWith("video/");
+  const isImage = file.type.startsWith("image/");
+  if (!isVideo && !isImage) {
+    return NextResponse.json({ error: "Le fichier doit etre une image ou une video" }, { status: 400 });
   }
 
   const parsed = fieldsSchema.safeParse({
@@ -43,13 +47,12 @@ export async function POST(request: Request, { params }: { params: { id: string 
     capturedAt: form.get("capturedAt") ?? undefined,
     note: form.get("note") ?? undefined,
     groupId: form.get("groupId") ?? undefined,
+    direction: form.get("direction") ?? undefined,
   });
   if (!parsed.success) {
     return NextResponse.json({ error: "Metadonnees invalides" }, { status: 400 });
   }
-  const { latitude, longitude, accuracy, capturedAt, note, groupId } = parsed.data;
-
-  const originalBuffer = await normalizeImage(Buffer.from(await file.arrayBuffer()));
+  const { latitude, longitude, accuracy, capturedAt, note, groupId, direction } = parsed.data;
 
   const geocoded =
     latitude !== undefined && longitude !== undefined
@@ -57,27 +60,42 @@ export async function POST(request: Request, { params }: { params: { id: string 
       : null;
   const address = geocoded?.address ?? null;
   const country = geocoded?.country ?? null;
-
   const capturedDate = capturedAt ?? new Date();
 
-  const stampedBuffer = await renderStampedImage(originalBuffer, {
-    title: project.name,
-    address,
-    latitude: latitude ?? null,
-    longitude: longitude ?? null,
-    accuracy: accuracy ?? null,
-    capturedAt: capturedDate,
-    note: note ?? null,
-  });
+  let originalPath: string;
+  let stampedPath: string;
+  let durationSeconds: number | null = null;
 
-  const originalPath = await saveProjectFile(project.id, originalBuffer, "original");
-  const stampedPath = await saveProjectFile(project.id, stampedBuffer, "stamped");
+  if (isVideo) {
+    const rawBuffer = Buffer.from(await file.arrayBuffer());
+    durationSeconds = await getVideoDurationSeconds(rawBuffer);
+    const compressed = await compressVideo(rawBuffer);
+    // Pas de tampon geoloc incruste pour une video (pas de retouche image
+    // possible) : originalPath et stampedPath pointent vers le meme fichier.
+    originalPath = await saveProjectFile(project.id, compressed, "original", "mp4");
+    stampedPath = originalPath;
+  } else {
+    const originalBuffer = await normalizeImage(Buffer.from(await file.arrayBuffer()));
+    const stampedBuffer = await renderStampedImage(originalBuffer, {
+      title: project.name,
+      address,
+      latitude: latitude ?? null,
+      longitude: longitude ?? null,
+      accuracy: accuracy ?? null,
+      capturedAt: capturedDate,
+      note: note ?? null,
+    });
+    originalPath = await saveProjectFile(project.id, originalBuffer, "original");
+    stampedPath = await saveProjectFile(project.id, stampedBuffer, "stamped");
+  }
 
   const photo = await prisma.photo.create({
     data: {
       projectId: project.id,
+      mediaType: isVideo ? "video" : "photo",
       originalPath,
       stampedPath,
+      durationSeconds,
       latitude: latitude ?? null,
       longitude: longitude ?? null,
       accuracy: accuracy ?? null,
@@ -85,6 +103,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       country,
       note: note ?? null,
       groupId: groupId ?? null,
+      direction: direction ?? null,
       capturedAt: capturedDate,
     },
   });

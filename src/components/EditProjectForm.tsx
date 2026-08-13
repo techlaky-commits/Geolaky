@@ -2,14 +2,21 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Pencil } from "lucide-react";
 
-export function NewProjectForm() {
+type Project = {
+  id: string;
+  name: string;
+  address: string | null;
+  sharePointUrl: string | null;
+};
+
+export function EditProjectForm({ project }: { project: Project }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState("");
-  const [address, setAddress] = useState("");
-  const [sharePointUrl, setSharePointUrl] = useState("");
+  const [name, setName] = useState(project.name);
+  const [address, setAddress] = useState(project.address ?? "");
+  const [sharePointUrl, setSharePointUrl] = useState(project.sharePointUrl ?? "");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -18,25 +25,22 @@ export function NewProjectForm() {
     setLoading(true);
     setError(null);
 
-    const res = await fetch("/api/projects", {
-      method: "POST",
+    const res = await fetch(`/api/projects/${project.id}`, {
+      method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name,
-        address: address || undefined,
-        sharePointUrl: sharePointUrl || undefined,
+        address: address.trim() || null,
+        sharePointUrl: sharePointUrl.trim() || null,
       }),
     });
 
     setLoading(false);
     if (!res.ok) {
-      setError("Impossible de creer le projet.");
+      setError("Impossible d'enregistrer les modifications.");
       return;
     }
 
-    setName("");
-    setAddress("");
-    setSharePointUrl("");
     setOpen(false);
     router.refresh();
   }
@@ -45,10 +49,10 @@ export function NewProjectForm() {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 font-medium text-white hover:bg-brand-700"
+        className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
       >
-        <Plus className="h-4 w-4" />
-        Nouveau projet
+        <Pencil className="h-4 w-4" />
+        Modifier le projet
       </button>
     );
   }
@@ -56,17 +60,16 @@ export function NewProjectForm() {
   return (
     <form
       onSubmit={onSubmit}
-      className="mb-6 space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+      className="mb-6 w-full space-y-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
     >
+      <h2 className="text-sm font-semibold text-slate-900">Parametres du projet</h2>
       <div>
         <label className="mb-1 block text-sm font-medium text-slate-700">Nom du projet / site</label>
         <input
           required
-          autoFocus
           value={name}
           onChange={(e) => setName(e.target.value)}
           className="w-full rounded-md border border-slate-300 px-3 py-2"
-          placeholder="Ex : Chantier Rue de la Paix"
         />
       </div>
       <div>
@@ -98,7 +101,7 @@ export function NewProjectForm() {
           disabled={loading}
           className="rounded-md bg-brand-600 px-4 py-2 font-medium text-white hover:bg-brand-700 disabled:opacity-60"
         >
-          {loading ? "Creation..." : "Creer"}
+          {loading ? "Enregistrement..." : "Enregistrer"}
         </button>
         <button
           type="button"

@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Camera, Download, Map, MapPin } from "lucide-react";
+import { Camera, Download, ExternalLink, Map, MapPin } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { PhotoGalleryGrid } from "@/components/PhotoGalleryGrid";
+import { EditProjectForm } from "@/components/EditProjectForm";
 
 export default async function ProjectDetailPage({ params }: { params: { id: string } }) {
   const user = await getCurrentUser();
@@ -25,6 +26,17 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
               <MapPin className="h-3.5 w-3.5" />
               {project.address}
             </p>
+          )}
+          {project.sharePointUrl && (
+            <a
+              href={project.sharePointUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-1 flex items-center gap-1 text-sm text-brand-600 hover:underline"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              Dossier SharePoint
+            </a>
           )}
         </div>
         <div className="flex gap-2">
@@ -52,6 +64,17 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
         </div>
       </div>
 
+      <div className="mb-4 flex justify-end">
+        <EditProjectForm
+          project={{
+            id: project.id,
+            name: project.name,
+            address: project.address,
+            sharePointUrl: project.sharePointUrl,
+          }}
+        />
+      </div>
+
       {project.photos.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center text-slate-500">
           Aucune photo pour ce projet. Utilisez &laquo;&nbsp;Prendre une photo&nbsp;&raquo; depuis votre mobile.
@@ -63,7 +86,12 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
             telechargement, suppression).
           </p>
           <PhotoGalleryGrid
-            photos={project.photos.map((p) => ({ id: p.id, stampedPath: p.stampedPath, address: p.address }))}
+            photos={project.photos.map((p) => ({
+              id: p.id,
+              stampedPath: p.stampedPath,
+              address: p.address,
+              mediaType: p.mediaType,
+            }))}
             projectName={project.name}
           />
         </>

@@ -4,7 +4,7 @@ import "leaflet/dist/leaflet.css";
 
 import { useEffect } from "react";
 import L from "leaflet";
-import { LayersControl, MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
+import { LayersControl, MapContainer, Marker, TileLayer, ZoomControl, useMap } from "react-leaflet";
 
 const pinIcon = L.divIcon({
   className: "",
@@ -40,7 +40,15 @@ export default function PositionMap({
 }) {
   return (
     <div className="h-64 w-full overflow-hidden rounded-lg border border-slate-200">
-      <MapContainer center={[latitude, longitude]} zoom={18} scrollWheelZoom className="h-full w-full">
+      <MapContainer
+        center={[latitude, longitude]}
+        zoom={18}
+        scrollWheelZoom
+        zoomControl={false}
+        className="h-full w-full"
+      >
+        <ZoomControl position="bottomright" />
+
         <LayersControl position="topright">
           <LayersControl.BaseLayer checked name="Satellite">
             <TileLayer
@@ -49,7 +57,7 @@ export default function PositionMap({
               maxZoom={19}
             />
           </LayersControl.BaseLayer>
-          <LayersControl.BaseLayer name="Plan (OpenStreetMap)">
+          <LayersControl.BaseLayer name="Map (OpenStreetMap)">
             <TileLayer
               attribution="&copy; OpenStreetMap contributors"
               url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -66,7 +74,7 @@ export default function PositionMap({
               tileSize={256}
             />
           </LayersControl.Overlay>
-          <LayersControl.Overlay name="Cadastre (Italie)">
+          <LayersControl.Overlay name="Cadastre (Italy)">
             <TileLayer
               attribution="Catasto &copy; Agenzia delle Entrate"
               url="/api/tiles/it-cadastre/{z}/{x}/{y}"

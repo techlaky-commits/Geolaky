@@ -23,6 +23,8 @@ export async function GET() {
       country: true,
       note: true,
       groupId: true,
+      mediaType: true,
+      direction: true,
       capturedAt: true,
     },
     orderBy: { capturedAt: "desc" },
@@ -40,6 +42,8 @@ export async function GET() {
       country: p.country,
       note: p.note,
       groupId: p.groupId,
+      mediaType: p.mediaType,
+      direction: p.direction,
       capturedAt: p.capturedAt,
     })),
   });

@@ -25,6 +25,12 @@ model Project {
   name        String
   address     String?
   description String?
+
+  // Dossier SharePoint associe au projet (URL ou chemin). Stockage du lien
+  // uniquement : aucune synchronisation reelle tant qu'aucune app Microsoft
+  // Graph/SharePoint n'est enregistree pour ce compte (voir README).
+  sharePointUrl String?
+
   ownerId     String
   owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   photos      Photo[]
@@ -37,9 +43,16 @@ model Photo {
   projectId    String
   project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  // Chemins relatifs sous STORAGE_DIR
+  // "photo" ou "video". Les medias existants sont tous des photos (valeur
+  // par defaut), donc retrocompatible sans migration de donnees.
+  mediaType    String   @default("photo")
+
+  // Chemins relatifs sous STORAGE_DIR. Pour une video : stampedPath pointe
+  // vers le fichier video original lui-meme (pas de tampon incruste, une
+  // video n'est pas retouchee comme une photo).
   originalPath String
   stampedPath  String
+  durationSeconds Float?
 
   latitude     Float?
   longitude    Float?
@@ -47,6 +60,10 @@ model Photo {
   address      String?
   country      String?
   note         String?
+
+  // Direction de prise de vue (GPSImgDirection EXIF), 0-360 degres, 0 = Nord.
+  // Null si l'information n'est pas presente dans les metadonnees.
+  direction    Float?
 
   // Parametres de recadrage/rotation appliques a l'original (JSON serialise)
   cropData     String?

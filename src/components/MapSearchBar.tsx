@@ -124,7 +124,7 @@ export function MapSearchBar({
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
-          placeholder="Rechercher : projet, adresse, ou GPS"
+          placeholder="Search: project, address, or GPS"
           className="w-full bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none"
         />
         {loading && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-brand-500" />}
@@ -135,7 +135,7 @@ export function MapSearchBar({
               setSuggestions([]);
             }}
             className="shrink-0 text-slate-400 hover:text-slate-600"
-            aria-label="Effacer la recherche"
+            aria-label="Clear search"
           >
             <X className="h-3.5 w-3.5" />
           </button>

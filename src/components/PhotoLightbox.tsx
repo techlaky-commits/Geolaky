@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, ExternalLink, MapPinned, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, ExternalLink, MapPinned, Trash2, X } from "lucide-react";
 
 export type LightboxPhoto = {
   id: string;
@@ -13,10 +13,11 @@ export type LightboxPhoto = {
   capturedAt: string;
   latitude: number;
   longitude: number;
+  mediaType?: string;
 };
 
 function formatDateTime(iso: string) {
-  return new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(
+  return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(
     new Date(iso),
   );
 }
@@ -26,13 +27,16 @@ export function PhotoLightbox({
   initialIndex = 0,
   onClose,
   onEditPosition,
+  onDelete,
 }: {
   photos: LightboxPhoto[];
   initialIndex?: number;
   onClose: () => void;
   onEditPosition?: (photo: LightboxPhoto) => void;
+  onDelete?: (photoId: string) => Promise<boolean>;
 }) {
   const [index, setIndex] = useState(initialIndex);
+  const [deleting, setDeleting] = useState(false);
   const count = photos.length;
   const current = photos[index];
 
@@ -52,6 +56,19 @@ export function PhotoLightbox({
 
   if (!current) return null;
 
+  const isVideo = current.mediaType === "video";
+
+  async function handleDelete() {
+    if (!onDelete) return;
+    if (!confirm("Delete this item permanently?")) return;
+    setDeleting(true);
+    const ok = await onDelete(current.id);
+    if (!ok) {
+      setDeleting(false);
+      alert("Could not delete this item.");
+    }
+  }
+
   return (
     <div
       className="fixed inset-0 z-[2000] flex flex-col bg-black/90 backdrop-blur-sm"
@@ -64,7 +81,7 @@ export function PhotoLightbox({
         <button
           onClick={onClose}
           className="rounded-full p-1.5 hover:bg-white/10"
-          aria-label="Fermer"
+          aria-label="Close"
         >
           <X className="h-5 w-5" />
         </button>
@@ -78,19 +95,29 @@ export function PhotoLightbox({
               prev();
             }}
             className="absolute left-2 z-10 rounded-full bg-black/60 p-2 text-white hover:bg-black/80 sm:left-4"
-            aria-label="Photo precedente"
+            aria-label="Previous"
           >
             <ChevronLeft className="h-6 w-6" />
           </button>
         )}
 
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={`/api/files/${current.stampedPath}`}
-          alt={current.address ?? current.projectName}
-          onClick={(e) => e.stopPropagation()}
-          className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
-        />
+        {isVideo ? (
+          <video
+            key={current.id}
+            src={`/api/files/${current.stampedPath}`}
+            controls
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
+          />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={`/api/files/${current.stampedPath}`}
+            alt={current.address ?? current.projectName}
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
+          />
+        )}
 
         {count > 1 && (
           <button
@@ -99,7 +126,7 @@ export function PhotoLightbox({
               next();
             }}
             className="absolute right-2 z-10 rounded-full bg-black/60 p-2 text-white hover:bg-black/80 sm:right-4"
-            aria-label="Photo suivante"
+            aria-label="Next"
           >
             <ChevronRight className="h-6 w-6" />
           </button>
@@ -119,7 +146,7 @@ export function PhotoLightbox({
             href={`/photos/${current.id}`}
             className="inline-flex items-center gap-1 rounded-md border border-white/25 px-3 py-1.5 text-sm font-medium text-white hover:bg-white/10"
           >
-            Ouvrir dans l&apos;editeur
+            Open in editor
             <ExternalLink className="h-3.5 w-3.5" />
           </Link>
           {onEditPosition && (
@@ -127,8 +154,18 @@ export function PhotoLightbox({
               onClick={() => onEditPosition(current)}
               className="inline-flex items-center gap-1 rounded-md border border-white/25 px-3 py-1.5 text-sm font-medium text-white hover:bg-white/10"
             >
-              Modifier la position
+              Edit position
               <MapPinned className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="inline-flex items-center gap-1 rounded-md border border-red-400/40 px-3 py-1.5 text-sm font-medium text-red-300 hover:bg-red-500/10 disabled:opacity-60"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              {deleting ? "Deleting..." : "Delete"}
             </button>
           )}
         </div>

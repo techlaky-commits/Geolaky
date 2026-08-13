@@ -84,22 +84,26 @@ export async function PATCH(request: Request, { params }: { params: { id: string
     projectName = targetProject.name;
   }
 
-  const originalBuffer = await readProjectFile(photo.originalPath);
-  const stampedBuffer = await renderStampedImage(
-    originalBuffer,
-    {
-      title: projectName,
-      address,
-      latitude,
-      longitude,
-      accuracy,
-      capturedAt: photo.capturedAt,
-      note,
-    },
-    crop,
-  );
+  // Une video n'a pas de tampon geoloc incruste (pas de retouche image
+  // possible) : seuls les champs sont mis a jour, le fichier reste intact.
+  if (photo.mediaType !== "video") {
+    const originalBuffer = await readProjectFile(photo.originalPath);
+    const stampedBuffer = await renderStampedImage(
+      originalBuffer,
+      {
+        title: projectName,
+        address,
+        latitude,
+        longitude,
+        accuracy,
+        capturedAt: photo.capturedAt,
+        note,
+      },
+      crop,
+    );
 
-  await overwriteProjectFile(photo.stampedPath, stampedBuffer);
+    await overwriteProjectFile(photo.stampedPath, stampedBuffer);
+  }
 
   const updated = await prisma.photo.update({
     where: { id: photo.id },

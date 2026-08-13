@@ -6,11 +6,13 @@ import {
   ArrowLeft,
   Camera,
   CheckCircle2,
+  Film,
   ImagePlus,
   Loader2,
   MapPin,
   Send,
   TriangleAlert,
+  Video,
   X,
 } from "lucide-react";
 
@@ -33,7 +35,16 @@ function formatDateTime(date: Date) {
   return new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
-export function CaptureClient({ projectId, projectName }: { projectId: string; projectName: string }) {
+export function CaptureClient({
+  projectId,
+  projectName,
+  mode = "photo",
+}: {
+  projectId: string;
+  projectName: string;
+  mode?: "photo" | "video";
+}) {
+  const isVideoMode = mode === "video";
   const [geo, setGeo] = useState<Coords | null>(null);
   const [geoStatus, setGeoStatus] = useState<"locating" | "ok" | "error">("locating");
   const [shots, setShots] = useState<Shot[]>([]);
@@ -164,7 +175,7 @@ export function CaptureClient({ projectId, projectName }: { projectId: string; p
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*"
+              accept={isVideoMode ? "video/*" : "image/*"}
               capture="environment"
               onChange={onFileChange}
               className="hidden"
@@ -173,12 +184,16 @@ export function CaptureClient({ projectId, projectName }: { projectId: string; p
               onClick={() => fileInputRef.current?.click()}
               className="flex h-24 w-24 items-center justify-center rounded-full bg-brand-600 text-white shadow-lg transition hover:bg-brand-700 active:scale-95"
             >
-              <Camera className="h-10 w-10" />
+              {isVideoMode ? <Video className="h-10 w-10" /> : <Camera className="h-10 w-10" />}
             </button>
             <p className="text-center text-sm text-slate-500">
               {shots.length === 0
-                ? "Appuyez pour prendre une photo geolocalisee"
-                : "Reprenez une autre photo du meme endroit si besoin"}
+                ? isVideoMode
+                  ? "Appuyez pour filmer une video geolocalisee"
+                  : "Appuyez pour prendre une photo geolocalisee"
+                : isVideoMode
+                  ? "Filmez une autre video du meme endroit si besoin"
+                  : "Reprenez une autre photo du meme endroit si besoin"}
             </p>
             {shots.length === 0 && (
               <Link href={`/projects/${projectId}`} className="text-sm text-brand-600 hover:underline">
@@ -195,8 +210,19 @@ export function CaptureClient({ projectId, projectName }: { projectId: string; p
                     key={shot.id}
                     className="relative overflow-hidden rounded-lg border border-slate-200"
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={shot.previewUrl} alt="" className="aspect-square w-full object-cover" />
+                    {isVideoMode ? (
+                      <video src={shot.previewUrl} preload="metadata" muted className="aspect-square w-full object-cover" />
+                    ) : (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={shot.previewUrl} alt="" className="aspect-square w-full object-cover" />
+                    )}
+                    {isVideoMode && (
+                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-black/50">
+                          <Film className="h-3.5 w-3.5 text-white" />
+                        </div>
+                      </div>
+                    )}
                     <div className="absolute left-1 top-1 rounded-full bg-black/60 p-1">
                       {shot.coords ? (
                         <MapPin className="h-3 w-3 text-green-400" />
@@ -218,7 +244,8 @@ export function CaptureClient({ projectId, projectName }: { projectId: string; p
                 onClick={() => setStep("note")}
                 className="flex w-full items-center justify-center gap-2 rounded-md bg-brand-600 px-4 py-2.5 font-medium text-white hover:bg-brand-700"
               >
-                Continuer avec {shots.length} photo{shots.length > 1 ? "s" : ""}
+                Continuer avec {shots.length} {isVideoMode ? "video" : "photo"}
+                {shots.length > 1 ? "s" : ""}
               </button>
             </>
           )}
@@ -233,8 +260,12 @@ export function CaptureClient({ projectId, projectName }: { projectId: string; p
                 key={shot.id}
                 className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-slate-200"
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={shot.previewUrl} alt="" className="h-full w-full object-cover" />
+                {isVideoMode ? (
+                  <video src={shot.previewUrl} preload="metadata" muted className="h-full w-full object-cover" />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={shot.previewUrl} alt="" className="h-full w-full object-cover" />
+                )}
                 {shot.status === "uploading" && (
                   <div className="absolute inset-0 flex items-center justify-center bg-black/40">
                     <Loader2 className="h-5 w-5 animate-spin text-white" />
@@ -300,7 +331,8 @@ export function CaptureClient({ projectId, projectName }: { projectId: string; p
         <div className="space-y-4">
           <div className="flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
             <CheckCircle2 className="h-4 w-4 shrink-0" />
-            {shots.length} photo{shots.length > 1 ? "s" : ""} envoyee{shots.length > 1 ? "s" : ""} et
+            {shots.length} {isVideoMode ? "video" : "photo"}
+            {shots.length > 1 ? "s" : ""} envoyee{shots.length > 1 ? "s" : ""} et
             geolocalisee{shots.length > 1 ? "s" : ""} avec succes.
           </div>
           <div className="flex gap-2">
@@ -308,8 +340,8 @@ export function CaptureClient({ projectId, projectName }: { projectId: string; p
               onClick={resetAll}
               className="flex flex-1 items-center justify-center gap-2 rounded-md border border-slate-300 px-4 py-2.5 font-medium text-slate-700 hover:bg-slate-50"
             >
-              <ImagePlus className="h-4 w-4" />
-              Prendre d&apos;autres photos
+              {isVideoMode ? <Video className="h-4 w-4" /> : <ImagePlus className="h-4 w-4" />}
+              {isVideoMode ? "Filmer d'autres videos" : "Prendre d'autres photos"}
             </button>
             <Link
               href={`/projects/${projectId}`}

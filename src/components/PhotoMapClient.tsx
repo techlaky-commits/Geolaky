@@ -6,7 +6,7 @@ import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 
 import { useEffect, useMemo, useState } from "react";
 import L from "leaflet";
-import { LayersControl, MapContainer, Marker, TileLayer, useMap } from "react-leaflet";
+import { LayersControl, MapContainer, Marker, TileLayer, ZoomControl, useMap } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import { Check, Loader2, MapPin, X } from "lucide-react";
 import { PhotoLightbox, type LightboxPhoto } from "@/components/PhotoLightbox";
@@ -25,16 +25,20 @@ type MapPhoto = {
   country: string | null;
   note: string | null;
   groupId: string | null;
+  mediaType: string;
+  direction: number | null;
   capturedAt: string;
 };
 
-/** Un point sur la carte : soit une photo isolee, soit un lot de photos
+/** Un point sur la carte : soit un media isole, soit un lot de photos/videos
  * prises/importees ensemble (meme groupId), fusionnees en un seul marqueur. */
 type MapPoint = {
   key: string;
   latitude: number;
   longitude: number;
   coverUrl: string;
+  isVideo: boolean;
+  direction: number | null;
   members: MapPhoto[];
 };
 
@@ -51,6 +55,8 @@ function buildMapPoints(photos: MapPhoto[]): MapPoint[] {
         latitude: photo.latitude,
         longitude: photo.longitude,
         coverUrl: `/api/files/${photo.stampedPath}`,
+        isVideo: photo.mediaType === "video",
+        direction: photo.direction,
         members: [photo],
       });
       continue;
@@ -71,6 +77,10 @@ function buildMapPoints(photos: MapPhoto[]): MapPoint[] {
       latitude,
       longitude,
       coverUrl: `/api/files/${sorted[0].stampedPath}`,
+      isVideo: sorted[0].mediaType === "video",
+      // Une direction n'est affichee que pour un media isole : un lot peut
+      // regrouper des prises de vue orientees differemment.
+      direction: members.length === 1 ? members[0].direction : null,
       members: sorted,
     });
   }
@@ -78,7 +88,15 @@ function buildMapPoints(photos: MapPhoto[]): MapPoint[] {
   return points;
 }
 
-function photoIcon(url: string, count: number, selected = false): DivIconWithMeta {
+const VIDEO_PLACEHOLDER_SVG = encodeURIComponent(`
+  <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+    <rect width="64" height="64" fill="#1e293b"/>
+    <circle cx="32" cy="32" r="14" fill="#ffffff" fill-opacity="0.9"/>
+    <path d="M27 24 L41 32 L27 40 Z" fill="#1e293b"/>
+  </svg>
+`.trim());
+
+function photoIcon(url: string, count: number, isVideo: boolean, direction: number | null, selected = false): DivIconWithMeta {
   const badge =
     count > 1
       ? `<div style="position:absolute;left:6px;bottom:3px;color:#ffffff;font-weight:700;font-size:15px;font-family:system-ui,sans-serif;text-shadow:0 1px 4px rgba(0,0,0,0.95);">${count}</div>`
@@ -86,15 +104,35 @@ function photoIcon(url: string, count: number, selected = false): DivIconWithMet
   const checkBadge = selected
     ? `<div style="position:absolute;right:3px;top:3px;width:18px;height:18px;border-radius:50%;background:#2563eb;border:2px solid #ffffff;display:flex;align-items:center;justify-content:center;color:#ffffff;font-size:11px;font-weight:700;">&#10003;</div>`
     : "";
+  const playBadge =
+    isVideo && count === 1
+      ? `<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">
+          <div style="width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;">
+            <div style="width:0;height:0;border-top:6px solid transparent;border-bottom:6px solid transparent;border-left:9px solid #ffffff;margin-left:2px;"></div>
+          </div>
+        </div>`
+      : "";
   const size = count > 1 ? 64 : 56;
   const border = selected ? "3px solid #2563eb" : "2.5px solid #ffffff";
+  // La fleche part du bord du marqueur et pointe dans la direction de prise
+  // de vue (0deg = Nord = vers le haut, sens horaire, comme un cap boussole).
+  const arrow =
+    direction !== null
+      ? `<div style="position:absolute;left:50%;top:50%;width:0;height:0;transform:translate(-50%,-100%) rotate(${direction}deg);transform-origin:50% 100%;">
+          <div style="width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:22px solid #2563eb;margin-top:-${size / 2 + 20}px;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));"></div>
+        </div>`
+      : "";
   const icon = L.divIcon({
     className: "",
     html: `
-      <div style="position:relative;width:${size}px;height:${size}px;border-radius:14px;overflow:hidden;border:${border};box-shadow:0 2px 8px rgba(0,0,0,0.45);">
-        <img src="${url}" style="width:100%;height:100%;object-fit:cover;display:block;" />
-        ${badge}
-        ${checkBadge}
+      <div style="position:relative;width:${size}px;height:${size}px;">
+        ${arrow}
+        <div style="position:absolute;inset:0;border-radius:14px;overflow:hidden;border:${border};box-shadow:0 2px 8px rgba(0,0,0,0.45);">
+          <img src="${url}" style="width:100%;height:100%;object-fit:cover;display:block;" />
+          ${playBadge}
+          ${badge}
+          ${checkBadge}
+        </div>
       </div>
     `,
     iconSize: [size, size],
@@ -129,6 +167,7 @@ function toLightboxPhotos(members: MapPhoto[]): LightboxPhoto[] {
     capturedAt: m.capturedAt,
     latitude: m.latitude,
     longitude: m.longitude,
+    mediaType: m.mediaType,
   }));
 }
 
@@ -222,7 +261,7 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
         return res.json();
       })
       .then((data) => setPhotos(data.photos))
-      .catch(() => setError("Impossible de charger les photos geolocalisees."));
+      .catch(() => setError("Could not load geotagged media."));
   };
 
   useEffect(loadPhotos, []);
@@ -243,13 +282,13 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
       setReposition(null);
       loadPhotos();
     } catch {
-      setPositionError("Impossible d'enregistrer la nouvelle position.");
+      setPositionError("Could not save the new position.");
     } finally {
       setSavingPosition(false);
     }
   }
 
-  /** Bascule la selection d'un point (photo isolee ou lot) en un seul geste. */
+  /** Bascule la selection d'un point (media isole ou lot) en un seul geste. */
   function toggleSelection(point: MapPoint) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -262,9 +301,9 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
     });
   }
 
-  /** Recherche independante des filtres : cherche parmi TOUTES les photos
-   * (pas seulement celles actuellement affichees), centre la carte sur le
-   * resultat et ouvre la visionneuse pour montrer les photos correspondantes. */
+  /** Recherche independante des filtres : cherche parmi TOUS les medias
+   * (pas seulement ceux actuellement affiches), centre la carte sur le
+   * resultat et ouvre la visionneuse pour montrer les medias correspondants. */
   function locateProject(projectId: string) {
     if (!photos) return;
     const matches = photos.filter((p) => p.projectId === projectId);
@@ -309,6 +348,8 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
       latitude: matches[0].latitude,
       longitude: matches[0].longitude,
       coverUrl: `/api/files/${matches[0].stampedPath}`,
+      isVideo: matches[0].mediaType === "video",
+      direction: matches.length === 1 ? matches[0].direction : null,
       members: matches,
     });
   }
@@ -329,10 +370,37 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
       setSelectedIds(new Set());
       loadPhotos();
     } catch {
-      setBulkError("Certaines modifications n'ont pas pu etre appliquees.");
+      setBulkError("Some updates could not be applied.");
     } finally {
       setBulkBusy(false);
     }
+  }
+
+  async function runBulkDelete() {
+    setBulkBusy(true);
+    setBulkError(null);
+    const ids = Array.from(selectedIds);
+    try {
+      for (const id of ids) {
+        const res = await fetch(`/api/photos/${id}`, { method: "DELETE" });
+        if (!res.ok) throw new Error("bulk delete failed");
+      }
+      setSelectedIds(new Set());
+      loadPhotos();
+    } catch {
+      setBulkError("Some items could not be deleted.");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function deleteFromLightbox(photoId: string) {
+    const res = await fetch(`/api/photos/${photoId}`, { method: "DELETE" });
+    if (res.ok) {
+      setLightboxPoint(null);
+      loadPhotos();
+    }
+    return res.ok;
   }
 
   const projectOptions = useMemo(() => {
@@ -360,9 +428,9 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
     );
   }, [photos, projectFilter, countryFilter]);
 
-  // Masque la photo en cours de repositionnement parmi les marqueurs normaux :
+  // Masque le media en cours de repositionnement parmi les marqueurs normaux :
   // sinon son repere de deplacement (plus petit) se retrouve cache derriere
-  // sa propre vignette photo, au meme endroit.
+  // sa propre vignette, au meme endroit.
   const mapPoints = useMemo(() => {
     const visible = reposition ? filteredPhotos.filter((p) => p.id !== reposition.photoId) : filteredPhotos;
     return buildMapPoints(visible);
@@ -386,8 +454,8 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
     return (
       <div className="flex h-[70vh] flex-col items-center justify-center gap-2 text-center text-slate-500">
         <MapPin className="h-10 w-10 text-slate-300" />
-        Aucune photo geolocalisee pour l&apos;instant. Prenez des photos depuis un projet pour
-        les voir apparaitre ici.
+        No geotagged media yet. Take or import photos/videos from a project to
+        see them appear here.
       </div>
     );
   }
@@ -412,7 +480,7 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
             onChange={(e) => setProjectFilter(e.target.value)}
             className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
           >
-            <option value="">Tous les projets</option>
+            <option value="">All projects</option>
             {projectOptions.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -425,7 +493,7 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
             onChange={(e) => setCountryFilter(e.target.value)}
             className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
           >
-            <option value="">Tous les pays</option>
+            <option value="">All countries</option>
             {countryOptions.map((c) => (
               <option key={c} value={c}>
                 {c}
@@ -442,17 +510,19 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
               className="flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
             >
               <X className="h-3.5 w-3.5" />
-              Reinitialiser
+              Reset
             </button>
           )}
 
           <span className="px-1 text-sm text-slate-500">
-            {filteredPhotos.length} photo{filteredPhotos.length > 1 ? "s" : ""}
+            {filteredPhotos.length} item{filteredPhotos.length > 1 ? "s" : ""}
           </span>
         </div>
       </div>
 
-      <MapContainer center={center} zoom={6} scrollWheelZoom className="h-full w-full">
+      <MapContainer center={center} zoom={6} scrollWheelZoom zoomControl={false} className="h-full w-full">
+        <ZoomControl position="bottomright" />
+
         <LayersControl position="topright">
           <LayersControl.BaseLayer checked name="Satellite">
             <TileLayer
@@ -461,7 +531,7 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
               maxZoom={19}
             />
           </LayersControl.BaseLayer>
-          <LayersControl.BaseLayer name="Plan (OpenStreetMap)">
+          <LayersControl.BaseLayer name="Map (OpenStreetMap)">
             <TileLayer
               attribution="&copy; OpenStreetMap contributors"
               url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -478,16 +548,16 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
               tileSize={256}
             />
           </LayersControl.Overlay>
-          <LayersControl.Overlay name="Limites administratives (France)">
+          <LayersControl.Overlay name="Administrative Boundaries (France)">
             <TileLayer
-              attribution="Limites administratives &copy; IGN"
+              attribution="Boundaries &copy; IGN"
               url={`${IGN_WMTS_BASE}&LAYER=LIMITES_ADMINISTRATIVES_EXPRESS.LATEST&STYLE=normal&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}&FORMAT=image/png`}
               minZoom={6}
               maxZoom={16}
               tileSize={256}
             />
           </LayersControl.Overlay>
-          <LayersControl.Overlay name="Cadastre (Italie)">
+          <LayersControl.Overlay name="Cadastre (Italy)">
             <TileLayer
               attribution="Catasto &copy; Agenzia delle Entrate"
               url="/api/tiles/it-cadastre/{z}/{x}/{y}"
@@ -514,11 +584,14 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
         >
           {mapPoints.map((point) => {
             const selected = point.members.every((m) => selectedIds.has(m.id));
+            const coverUrl = point.isVideo && point.members.length === 1
+              ? `data:image/svg+xml,${VIDEO_PLACEHOLDER_SVG}`
+              : point.coverUrl;
             return (
               <Marker
                 key={point.key}
                 position={[point.latitude, point.longitude]}
-                icon={photoIcon(point.coverUrl, point.members.length, selected)}
+                icon={photoIcon(coverUrl, point.members.length, point.isVideo, point.direction, selected)}
                 eventHandlers={{
                   click: (e) => {
                     const native = e.originalEvent as MouseEvent | undefined;
@@ -548,9 +621,7 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
 
       {reposition && (
         <div className="absolute inset-x-0 bottom-4 z-[1000] mx-auto flex w-fit max-w-[92%] flex-col items-center gap-2 rounded-lg bg-white/95 p-3 text-center shadow-md backdrop-blur">
-          <p className="text-sm text-slate-600">
-            Faites glisser le repere rouge jusqu&apos;a la position exacte de la photo.
-          </p>
+          <p className="text-sm text-slate-600">Drag the red pin to the exact position.</p>
           {positionError && <p className="text-sm text-red-600">{positionError}</p>}
           <div className="flex gap-2">
             <button
@@ -562,7 +633,7 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
               className="flex items-center gap-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
             >
               <X className="h-3.5 w-3.5" />
-              Annuler
+              Cancel
             </button>
             <button
               onClick={saveRepositionedPhoto}
@@ -574,7 +645,7 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
               ) : (
                 <Check className="h-3.5 w-3.5" />
               )}
-              Enregistrer la position
+              Save position
             </button>
           </div>
         </div>
@@ -589,6 +660,7 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
           onApplyProject={(id) => runBulkPatch({ projectId: id })}
           onApplyAddress={(address) => runBulkPatch({ address: address || null })}
           onApplyNote={(note) => runBulkPatch({ note: note || null })}
+          onDelete={runBulkDelete}
         />
       )}
 
@@ -600,6 +672,7 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
             setLightboxPoint(null);
             setReposition({ photoId: photo.id, latitude: photo.latitude, longitude: photo.longitude });
           }}
+          onDelete={deleteFromLightbox}
         />
       )}
     </div>

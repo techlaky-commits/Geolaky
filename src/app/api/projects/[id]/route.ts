@@ -22,6 +22,7 @@ const updateSchema = z.object({
   name: z.string().trim().min(1).max(200).optional(),
   address: z.string().trim().max(400).nullable().optional(),
   description: z.string().trim().max(2000).nullable().optional(),
+  sharePointUrl: z.string().trim().max(1000).nullable().optional(),
 });
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {

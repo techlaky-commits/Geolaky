@@ -97,7 +97,8 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
         <>
           <p className="mb-3 text-sm text-slate-500">
             Clic droit sur une photo pour un acces rapide (cadrage, position, remplacement,
-            telechargement, suppression).
+            telechargement, suppression). Touchez le cercle en haut a gauche d&apos;une vignette pour
+            en selectionner plusieurs (deplacer, copier, supprimer, grouper un commentaire).
           </p>
           <PhotoGalleryGrid
             photos={project.photos.map((p) => ({

@@ -96,34 +96,40 @@ const VIDEO_PLACEHOLDER_SVG = encodeURIComponent(`
   </svg>
 `.trim());
 
-/** Secteur/cone translucide indiquant la direction de prise de vue depuis un
- * marqueur : suffisamment large pour rester lisible sans presenter une
- * precision superieure a celle d'un cap boussole (~56 degres d'ouverture). */
+/** Secteur/faisceau translucide indiquant la direction de prise de vue depuis
+ * un marqueur : suffisamment large pour rester lisible sans presenter une
+ * precision superieure a celle d'un cap boussole (~56 degres d'ouverture).
+ * Demarre au-dela du coin le plus eloigne de la vignette (carre arrondi de
+ * cote `size`, donc jusqu'a size/2*sqrt(2) du centre en diagonale) quelle que
+ * soit la rotation, pour ne jamais empieter sur la photo une fois affiche
+ * au-dessus d'elle. */
 function buildDirectionCone(direction: number, size: number): string {
-  const radius = size * 0.75;
-  const halfAngleDeg = 28;
-  const halfAngleRad = (halfAngleDeg * Math.PI) / 180;
-  const spreadX = radius * Math.sin(halfAngleRad);
-  const spreadY = radius * Math.cos(halfAngleRad);
-  const padding = 3;
+  const nearRadius = size * 0.78;
+  const farRadius = nearRadius + size * 0.55;
+  const halfAngleRad = (28 * Math.PI) / 180;
+  const halfWidth = farRadius * Math.sin(halfAngleRad);
+  const padding = 4;
 
-  const width = spreadX * 2 + padding * 2;
-  const height = radius + padding * 2;
-  const apexX = width / 2;
-  const apexY = height - padding;
-  const leftX = apexX - spreadX;
-  const rightX = apexX + spreadX;
-  const edgeY = apexY - spreadY;
+  const boxWidth = halfWidth * 2 + padding * 2;
+  const boxHeight = farRadius + padding * 2;
+  const cx = boxWidth / 2;
+  const cy = farRadius + padding;
+  const pt = (x: number, y: number) => `${cx + x} ${cy + y}`;
 
-  const path = `M ${apexX} ${apexY} L ${leftX} ${edgeY} A ${radius} ${radius} 0 0 1 ${rightX} ${edgeY} Z`;
+  const nearLeftX = -nearRadius * Math.sin(halfAngleRad);
+  const nearRightX = nearRadius * Math.sin(halfAngleRad);
+  const nearY = -nearRadius * Math.cos(halfAngleRad);
+  const farY = -farRadius * Math.cos(halfAngleRad);
+
+  const path = `M ${pt(nearLeftX, nearY)} L ${pt(-halfWidth, farY)} A ${farRadius} ${farRadius} 0 0 1 ${pt(halfWidth, farY)} L ${pt(nearRightX, nearY)} A ${nearRadius} ${nearRadius} 0 0 0 ${pt(nearLeftX, nearY)} Z`;
 
   return `
-    <div style="position:absolute;left:50%;top:50%;width:0;height:0;transform:translate(-50%,-100%) rotate(${direction}deg);transform-origin:50% 100%;">
+    <div style="position:absolute;left:50%;top:50%;width:0;height:0;transform:rotate(${direction}deg);">
       <svg
-        width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"
-        style="position:absolute;left:${-width / 2}px;top:${-height}px;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.35));"
+        width="${boxWidth}" height="${boxHeight}" viewBox="0 0 ${boxWidth} ${boxHeight}"
+        style="position:absolute;left:${-cx}px;top:${-cy}px;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.45));"
       >
-        <path d="${path}" fill="#006f9c" fill-opacity="0.3" stroke="#006f9c" stroke-opacity="0.7" stroke-width="1.5" />
+        <path d="${path}" fill="#22c55e" fill-opacity="0.55" stroke="#15803d" stroke-opacity="0.9" stroke-width="1.5" stroke-linejoin="round" />
       </svg>
     </div>
   `;
@@ -147,21 +153,23 @@ function photoIcon(url: string, count: number, isVideo: boolean, direction: numb
       : "";
   const size = count > 1 ? 64 : 56;
   const border = selected ? "3px solid #f39815" : "2.5px solid #ffffff";
-  // Le secteur part du centre du marqueur et pointe dans la direction de
+  // Le secteur demarre au bord du marqueur et pointe dans la direction de
   // prise de vue (0deg = Nord = vers le haut, sens horaire, comme un cap
-  // boussole) - meme convention que la carte et l'editeur.
+  // boussole) - meme convention que la carte et l'editeur. Place APRES la
+  // vignette dans le HTML pour s'afficher au-dessus (plus visible), sans la
+  // recouvrir puisqu'il demarre au-dela de son bord.
   const arrow = direction !== null ? buildDirectionCone(direction, size) : "";
   const icon = L.divIcon({
     className: "",
     html: `
       <div style="position:relative;width:${size}px;height:${size}px;">
-        ${arrow}
         <div style="position:absolute;inset:0;border-radius:14px;overflow:hidden;border:${border};box-shadow:0 2px 8px rgba(0,0,0,0.45);">
           <img src="${url}" style="width:100%;height:100%;object-fit:cover;display:block;" />
           ${playBadge}
           ${badge}
           ${checkBadge}
         </div>
+        ${arrow}
       </div>
     `,
     iconSize: [size, size],

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Camera, Download, ExternalLink, Map, MapPin } from "lucide-react";
+import { Camera, Download, ExternalLink, FileArchive, Map, MapPin } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { PhotoGalleryGrid } from "@/components/PhotoGalleryGrid";
@@ -15,6 +15,8 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
     include: { photos: { orderBy: { capturedAt: "desc" } } },
   });
   if (!project) notFound();
+
+  const hasGeolocatedMedia = project.photos.some((p) => p.latitude !== null && p.longitude !== null);
 
   return (
     <div>
@@ -54,6 +56,16 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
             <Download className="h-4 w-4" />
             Rapport PDF
           </a>
+          {hasGeolocatedMedia && (
+            <a
+              href={`/api/projects/${project.id}/export-shp`}
+              title="Export georeference (polygones) pour QGIS"
+              className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <FileArchive className="h-4 w-4" />
+              Export SHP (QGIS)
+            </a>
+          )}
           <Link
             href={`/capture/${project.id}`}
             className="flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
@@ -92,6 +104,7 @@ export default async function ProjectDetailPage({ params }: { params: { id: stri
               stampedPath: p.stampedPath,
               address: p.address,
               mediaType: p.mediaType,
+              direction: p.direction,
             }))}
             projectName={project.name}
           />

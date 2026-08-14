@@ -20,6 +20,7 @@ type GalleryPhoto = {
   stampedPath: string;
   address: string | null;
   mediaType: string;
+  direction: number | null;
 };
 
 export function PhotoGalleryGrid({
@@ -150,6 +151,22 @@ export function PhotoGalleryGrid({
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-black/55">
                     <Film className="h-4 w-4 text-white" />
                   </div>
+                </div>
+              )}
+              {typeof photo.direction === "number" && (
+                <div
+                  className="pointer-events-none absolute bottom-1.5 right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/55"
+                  title="Direction de prise de vue"
+                >
+                  <div
+                    className="h-0 w-0"
+                    style={{
+                      borderLeft: "4px solid transparent",
+                      borderRight: "4px solid transparent",
+                      borderBottom: "7px solid #ffffff",
+                      transform: `rotate(${photo.direction}deg)`,
+                    }}
+                  />
                 </div>
               )}
             </Link>

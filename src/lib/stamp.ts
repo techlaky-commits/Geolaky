@@ -1,4 +1,5 @@
 import sharp from "sharp";
+import piexif from "piexifjs";
 
 // Taille/qualite max des images stockees : suffisant pour un affichage web
 // et un rapport PDF net, tout en gardant les fichiers tres legers en
@@ -20,6 +21,28 @@ export async function normalizeImage(buffer: Buffer): Promise<Buffer> {
     })
     .jpeg({ quality: JPEG_QUALITY })
     .toBuffer();
+}
+
+/** Ecrit la direction de prise de vue dans le tag EXIF standard
+ * GPSImgDirection (0-360 degres, reference "T" = Nord vrai), en plus de la
+ * valeur deja conservee dans les donnees internes (Photo.direction) qui
+ * pilote l'affichage carte/boussole. Best-effort : en cas d'echec (JPEG
+ * inhabituel, etc.), renvoie l'image inchangee plutot que de faire echouer
+ * tout l'upload pour une metadonnee secondaire. */
+export function embedGpsDirection(jpegBuffer: Buffer, direction: number): Buffer {
+  try {
+    const binary = jpegBuffer.toString("binary");
+    const exifObj = piexif.load(binary);
+    const normalized = ((direction % 360) + 360) % 360;
+    exifObj.GPS = exifObj.GPS ?? {};
+    exifObj.GPS[piexif.GPSIFD.GPSImgDirection] = [Math.round(normalized * 100), 100];
+    exifObj.GPS[piexif.GPSIFD.GPSImgDirectionRef] = "T";
+    const exifBytes = piexif.dump(exifObj);
+    const withExif = piexif.insert(exifBytes, binary);
+    return Buffer.from(withExif, "binary");
+  } catch {
+    return jpegBuffer;
+  }
 }
 
 export type CropData = {

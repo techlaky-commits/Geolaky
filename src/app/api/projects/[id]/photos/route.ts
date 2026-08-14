@@ -5,7 +5,7 @@ import { getCurrentUser } from "@/lib/session";
 import { getOwnedProject } from "@/lib/authz";
 import { saveProjectFile } from "@/lib/storage";
 import { reverseGeocode } from "@/lib/geocode";
-import { normalizeImage, renderStampedImage } from "@/lib/stamp";
+import { embedGpsDirection, normalizeImage, renderStampedImage } from "@/lib/stamp";
 import { compressVideo, getVideoDurationSeconds, getVideoLocationMetadata } from "@/lib/video";
 
 export const runtime = "nodejs";
@@ -91,8 +91,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
     originalPath = await saveProjectFile(project.id, compressedVideo as Buffer, "original", "mp4");
     stampedPath = originalPath;
   } else {
-    const originalBuffer = await normalizeImage(Buffer.from(await file.arrayBuffer()));
-    const stampedBuffer = await renderStampedImage(originalBuffer, {
+    let originalBuffer = await normalizeImage(Buffer.from(await file.arrayBuffer()));
+    let stampedBuffer = await renderStampedImage(originalBuffer, {
       title: project.name,
       address,
       latitude: latitude ?? null,
@@ -101,6 +101,10 @@ export async function POST(request: Request, { params }: { params: { id: string 
       capturedAt: capturedDate,
       note: note ?? null,
     });
+    if (direction !== undefined) {
+      originalBuffer = embedGpsDirection(originalBuffer, direction);
+      stampedBuffer = embedGpsDirection(stampedBuffer, direction);
+    }
     originalPath = await saveProjectFile(project.id, originalBuffer, "original");
     stampedPath = await saveProjectFile(project.id, stampedBuffer, "stamped");
   }

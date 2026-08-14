@@ -15,6 +15,8 @@ import {
   Video,
   X,
 } from "lucide-react";
+import { useCompassHeading } from "@/hooks/useCompassHeading";
+import { compassAbbreviation, formatDMS } from "@/lib/geo";
 
 type Coords = { latitude: number; longitude: number; accuracy: number };
 
@@ -36,6 +38,50 @@ function formatDateTime(date: Date) {
   return new Intl.DateTimeFormat("fr-FR", { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
+function pickVideoMimeType(): string {
+  if (typeof MediaRecorder === "undefined") return "";
+  const candidates = [
+    "video/mp4",
+    "video/webm;codecs=vp9,opus",
+    "video/webm;codecs=vp8,opus",
+    "video/webm",
+  ];
+  return candidates.find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
+}
+
+/** Boussole temps reel superposee au flux camera : aiguille fixe pointant
+ * vers le cap actuel, dans un cadran gradue N/E/S/O. */
+function CompassDial({ heading, absolute }: { heading: number; absolute: boolean }) {
+  return (
+    <div className="relative flex h-28 w-28 shrink-0 items-center justify-center rounded-full border-2 border-white/40 bg-black/45 shadow-lg backdrop-blur-sm">
+      <span className="absolute top-1.5 text-[10px] font-bold text-white">N</span>
+      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-white/70">E</span>
+      <span className="absolute bottom-1.5 text-[10px] font-bold text-white/70">S</span>
+      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-bold text-white/70">O</span>
+
+      <svg
+        className="absolute left-1/2 top-1/2 h-24 w-24"
+        style={{ transform: `translate(-50%, -50%) rotate(${heading}deg)` }}
+        viewBox="-50 -50 100 100"
+      >
+        <line x1="0" y1="4" x2="0" y2="-36" stroke="#006f9c" strokeWidth="3" strokeLinecap="round" />
+        <polygon points="0,-44 -7,-32 7,-32" fill="#006f9c" />
+      </svg>
+
+      <div className="flex flex-col items-center">
+        <span className="text-lg font-bold leading-none text-white">{Math.round(heading)}°</span>
+        <span className="text-xs font-semibold leading-none text-white/80">{compassAbbreviation(heading)}</span>
+      </div>
+
+      {!absolute && (
+        <span className="absolute -bottom-5 whitespace-nowrap rounded-full bg-amber-500/90 px-2 py-0.5 text-[9px] font-medium text-white">
+          Calibration recommandee
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function CaptureClient({
   projectId,
   projectName,
@@ -54,8 +100,22 @@ export function CaptureClient({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
+  const [cameraState, setCameraState] = useState<"starting" | "live" | "unavailable">("starting");
+  const [isRecording, setIsRecording] = useState(false);
+  const [compassGestureNeeded, setCompassGestureNeeded] = useState(false);
+
+  const compass = useCompassHeading();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const watchIdRef = useRef<number | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
+  const recordingStartRef = useRef<{ coords: Coords | null; direction: number | null }>({
+    coords: null,
+    direction: null,
+  });
 
   useEffect(() => {
     if (!("geolocation" in navigator)) {
@@ -80,44 +140,132 @@ export function CaptureClient({
     };
   }, []);
 
+  // Demarre le flux camera en direct des le montage : permet d'afficher la
+  // boussole en superposition (impossible avec l'appareil photo natif de
+  // l'OS, qui ouvre une autre application hors de notre controle). Si la
+  // camera n'est pas accessible (permission refusee, navigateur non
+  // compatible, pas de camera...), on retombe sur l'ancien selecteur de
+  // fichier natif pour que l'application reste utilisable.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function startCamera() {
+      if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+        if (!cancelled) setCameraState("unavailable");
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+          audio: isVideoMode,
+        });
+        if (cancelled) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        streamRef.current = stream;
+        if (videoRef.current) videoRef.current.srcObject = stream;
+        setCameraState("live");
+      } catch {
+        if (!cancelled) setCameraState("unavailable");
+      }
+    }
+
+    startCamera();
+    return () => {
+      cancelled = true;
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isVideoMode]);
+
+  useEffect(() => {
+    const DOE = (typeof window !== "undefined" ? window.DeviceOrientationEvent : undefined) as
+      | (typeof DeviceOrientationEvent & { requestPermission?: () => Promise<"granted" | "denied"> })
+      | undefined;
+    if (typeof DOE?.requestPermission === "function") setCompassGestureNeeded(true);
+  }, []);
+
+  async function activateCompass() {
+    await compass.requestPermission();
+    setCompassGestureNeeded(false);
+  }
+
+  function addShot(file: File, direction: number | null, coords: Coords | null) {
+    setShots((prev) => [
+      ...prev,
+      {
+        id: makeId(),
+        file,
+        previewUrl: URL.createObjectURL(file),
+        capturedAt: new Date(),
+        coords,
+        direction,
+        status: "pending",
+      },
+    ]);
+  }
+
+  function capturePhoto() {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (!video || !canvas || video.videoWidth === 0) return;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) return;
+        addShot(new File([blob], `capture-${makeId()}.jpg`, { type: "image/jpeg" }), compass.heading, geo);
+      },
+      "image/jpeg",
+      0.92,
+    );
+  }
+
+  function toggleRecording() {
+    if (isRecording) {
+      mediaRecorderRef.current?.stop();
+      return;
+    }
+    const stream = streamRef.current;
+    if (!stream) return;
+
+    recordingStartRef.current = { coords: geo, direction: compass.heading };
+    recordedChunksRef.current = [];
+    const mimeType = pickVideoMimeType();
+    const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) recordedChunksRef.current.push(e.data);
+    };
+    recorder.onstop = () => {
+      const type = recorder.mimeType || "video/webm";
+      const ext = type.includes("mp4") ? "mp4" : "webm";
+      const blob = new Blob(recordedChunksRef.current, { type });
+      addShot(
+        new File([blob], `capture-${makeId()}.${ext}`, { type }),
+        recordingStartRef.current.direction,
+        recordingStartRef.current.coords,
+      );
+      setIsRecording(false);
+    };
+    mediaRecorderRef.current = recorder;
+    recorder.start();
+    setIsRecording(true);
+  }
+
   const onFileChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       e.target.value = "";
       if (!file) return;
-      const id = makeId();
-      setShots((prev) => [
-        ...prev,
-        {
-          id,
-          file,
-          previewUrl: URL.createObjectURL(file),
-          capturedAt: new Date(),
-          coords: geo,
-          direction: null,
-          status: "pending",
-        },
-      ]);
-
-      // Le telephone embarque parfois le cap de la boussole (GPSImgDirection)
-      // dans l'EXIF de la photo au moment de la prise - a defaut, seule la
-      // position (watchPosition) est disponible, sans orientation.
-      if (!isVideoMode) {
-        (async () => {
-          try {
-            const exifr = await import("exifr");
-            const tags = await exifr.parse(file, { pick: ["GPSImgDirection"] }).catch(() => null);
-            const direction = typeof tags?.GPSImgDirection === "number" ? tags.GPSImgDirection : null;
-            if (direction !== null) {
-              setShots((prev) => prev.map((s) => (s.id === id ? { ...s, direction } : s)));
-            }
-          } catch {
-            // pas de metadonnee de direction disponible : la photo restera sans fleche sur la carte
-          }
-        })();
-      }
+      addShot(file, compass.heading, geo);
     },
-    [geo, isVideoMode],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [geo, compass.heading],
   );
 
   function removeShot(id: string) {
@@ -193,36 +341,92 @@ export function CaptureClient({
 
       {step === "shooting" && (
         <div className="space-y-4">
-          <div className="flex flex-col items-center gap-4 rounded-xl border border-slate-200 bg-white p-8">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept={isVideoMode ? "video/*" : "image/*"}
-              capture="environment"
-              onChange={onFileChange}
-              className="hidden"
-            />
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="flex h-24 w-24 items-center justify-center rounded-full bg-brand-600 text-white shadow-lg transition hover:bg-brand-700 active:scale-95"
-            >
-              {isVideoMode ? <Video className="h-10 w-10" /> : <Camera className="h-10 w-10" />}
-            </button>
-            <p className="text-center text-sm text-slate-500">
-              {shots.length === 0
-                ? isVideoMode
-                  ? "Appuyez pour filmer une video geolocalisee"
-                  : "Appuyez pour prendre une photo geolocalisee"
-                : isVideoMode
-                  ? "Filmez une autre video du meme endroit si besoin"
-                  : "Reprenez une autre photo du meme endroit si besoin"}
-            </p>
-            {shots.length === 0 && (
-              <Link href={`/projects/${projectId}`} className="text-sm text-brand-600 hover:underline">
-                Retour au projet
-              </Link>
-            )}
-          </div>
+          {cameraState === "unavailable" ? (
+            <div className="flex flex-col items-center gap-4 rounded-xl border border-slate-200 bg-white p-8">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={isVideoMode ? "video/*" : "image/*"}
+                capture="environment"
+                onChange={onFileChange}
+                className="hidden"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="flex h-24 w-24 items-center justify-center rounded-full bg-brand-600 text-white shadow-lg transition hover:bg-brand-700 active:scale-95"
+              >
+                {isVideoMode ? <Video className="h-10 w-10" /> : <Camera className="h-10 w-10" />}
+              </button>
+              <p className="text-center text-sm text-slate-500">
+                {shots.length === 0
+                  ? isVideoMode
+                    ? "Appuyez pour filmer une video geolocalisee"
+                    : "Appuyez pour prendre une photo geolocalisee"
+                  : isVideoMode
+                    ? "Filmez une autre video du meme endroit si besoin"
+                    : "Reprenez une autre photo du meme endroit si besoin"}
+              </p>
+              {shots.length === 0 && (
+                <Link href={`/projects/${projectId}`} className="text-sm text-brand-600 hover:underline">
+                  Retour au projet
+                </Link>
+              )}
+            </div>
+          ) : (
+            <div className="relative mx-auto overflow-hidden rounded-xl bg-black" style={{ aspectRatio: "3 / 4" }}>
+              <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
+              <canvas ref={canvasRef} className="hidden" />
+
+              {cameraState === "starting" && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-white">
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                </div>
+              )}
+
+              <div className="pointer-events-none absolute inset-x-0 top-3 flex flex-col items-center gap-2 px-3">
+                {compass.heading !== null ? (
+                  <CompassDial heading={compass.heading} absolute={compass.absolute} />
+                ) : compassGestureNeeded ? (
+                  <button
+                    onClick={activateCompass}
+                    className="pointer-events-auto rounded-full bg-black/60 px-3 py-1.5 text-xs font-medium text-white hover:bg-black/80"
+                  >
+                    Activer la boussole
+                  </button>
+                ) : null}
+
+                {geo && (
+                  <div className="rounded-full bg-black/50 px-3 py-1 text-center text-xs text-white backdrop-blur-sm">
+                    {formatDMS(geo.latitude, geo.longitude)} ±{Math.round(geo.accuracy)} m
+                  </div>
+                )}
+              </div>
+
+              {isRecording && (
+                <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full bg-red-600 px-2.5 py-1 text-xs font-semibold text-white">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-white" />
+                  REC
+                </div>
+              )}
+
+              <div className="absolute inset-x-0 bottom-4 flex items-center justify-center">
+                <button
+                  onClick={isVideoMode ? toggleRecording : capturePhoto}
+                  disabled={cameraState !== "live"}
+                  className={`flex h-16 w-16 items-center justify-center rounded-full border-4 border-white shadow-lg transition active:scale-95 disabled:opacity-50 ${
+                    isRecording ? "bg-red-600" : "bg-white/20 backdrop-blur"
+                  }`}
+                  aria-label={isVideoMode ? (isRecording ? "Arreter l'enregistrement" : "Demarrer l'enregistrement") : "Prendre la photo"}
+                >
+                  {isVideoMode && isRecording ? (
+                    <span className="h-5 w-5 rounded-sm bg-white" />
+                  ) : (
+                    <span className={`h-12 w-12 rounded-full ${isVideoMode ? "bg-red-600" : "bg-white"}`} />
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
 
           {shots.length > 0 && (
             <>

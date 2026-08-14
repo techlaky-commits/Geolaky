@@ -11,11 +11,36 @@ const COMPASS_LABELS = [
   "Nord-Ouest",
 ];
 
+const COMPASS_ABBREVIATIONS = ["N", "NE", "E", "SE", "S", "SO", "O", "NO"];
+
 /** Convertit un cap en degres (0-360, 0 = Nord, sens horaire) en libelle cardinal (8 directions). */
 export function compassLabel(degrees: number): string {
   const normalized = ((degrees % 360) + 360) % 360;
   const index = Math.round(normalized / 45) % 8;
   return COMPASS_LABELS[index];
+}
+
+/** Meme decoupage que compassLabel, en abreviation courte (N, NE, E, SE, S, SO, O, NO). */
+export function compassAbbreviation(degrees: number): string {
+  const normalized = ((degrees % 360) + 360) % 360;
+  const index = Math.round(normalized / 45) % 8;
+  return COMPASS_ABBREVIATIONS[index];
+}
+
+/** Formate une coordonnee decimale en degres/minutes/secondes, ex: 44.8492 -> 44°50'57"N. */
+function toDMSPart(value: number, positiveSuffix: string, negativeSuffix: string): string {
+  const suffix = value >= 0 ? positiveSuffix : negativeSuffix;
+  const abs = Math.abs(value);
+  const degrees = Math.floor(abs);
+  const minutesFloat = (abs - degrees) * 60;
+  const minutes = Math.floor(minutesFloat);
+  const seconds = Math.round((minutesFloat - minutes) * 60);
+  return `${degrees}°${minutes}'${seconds}"${suffix}`;
+}
+
+/** Formate une paire lat/lon en notation DMS, ex: 44°50'57"N, 0°33'38"O. */
+export function formatDMS(latitude: number, longitude: number): string {
+  return `${toDMSPart(latitude, "N", "S")}, ${toDMSPart(longitude, "E", "O")}`;
 }
 
 /** Parse un texte de coordonnees GPS collees, ex: "48.858370, 2.294481". */

@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { getOwnedPhoto, getOwnedProject } from "@/lib/authz";
 import { deleteProjectFile, overwriteProjectFile, readProjectFile } from "@/lib/storage";
-import { renderStampedImage, type CropData } from "@/lib/stamp";
+import { embedGpsDirection, renderStampedImage, type CropData } from "@/lib/stamp";
 import { reverseGeocode } from "@/lib/geocode";
 
 export const runtime = "nodejs";
@@ -88,7 +88,7 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   // possible) : seuls les champs sont mis a jour, le fichier reste intact.
   if (photo.mediaType !== "video") {
     const originalBuffer = await readProjectFile(photo.originalPath);
-    const stampedBuffer = await renderStampedImage(
+    let stampedBuffer = await renderStampedImage(
       originalBuffer,
       {
         title: projectName,
@@ -101,6 +101,9 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       },
       crop,
     );
+    if (photo.direction !== null) {
+      stampedBuffer = embedGpsDirection(stampedBuffer, photo.direction);
+    }
 
     await overwriteProjectFile(photo.stampedPath, stampedBuffer);
   }

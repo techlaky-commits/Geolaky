@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/session";
 import { getOwnedPhoto } from "@/lib/authz";
 import { overwriteProjectFile } from "@/lib/storage";
 import { reverseGeocode } from "@/lib/geocode";
-import { normalizeImage, renderStampedImage } from "@/lib/stamp";
+import { embedGpsDirection, normalizeImage, renderStampedImage } from "@/lib/stamp";
 import { compressVideo, getVideoDurationSeconds, getVideoLocationMetadata } from "@/lib/video";
 
 export const runtime = "nodejs";
@@ -66,8 +66,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
     await overwriteProjectFile(photo.originalPath, compressed);
     // stampedPath pointe vers le meme fichier pour une video (voir route d'upload).
   } else {
-    const originalBuffer = await normalizeImage(Buffer.from(await file.arrayBuffer()));
-    const stampedBuffer = await renderStampedImage(originalBuffer, {
+    let originalBuffer = await normalizeImage(Buffer.from(await file.arrayBuffer()));
+    let stampedBuffer = await renderStampedImage(originalBuffer, {
       title: photo.project.name,
       address: photo.address,
       latitude: photo.latitude,
@@ -76,6 +76,10 @@ export async function POST(request: Request, { params }: { params: { id: string 
       capturedAt: photo.capturedAt,
       note: photo.note,
     });
+    if (direction !== null) {
+      originalBuffer = embedGpsDirection(originalBuffer, direction);
+      stampedBuffer = embedGpsDirection(stampedBuffer, direction);
+    }
 
     // Ecrase les fichiers en place (memes chemins) : les URLs deja affichees
     // cote client (photo.originalPath/stampedPath) restent valides sans

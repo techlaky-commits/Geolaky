@@ -10,6 +10,7 @@ type Project = {
   address: string | null;
   sharePointUrl: string | null;
   coverPhotoPath: string | null;
+  photoCount: number;
 };
 
 export function EditProjectForm({ project }: { project: Project }) {
@@ -22,8 +23,30 @@ export function EditProjectForm({ project }: { project: Project }) {
   const [coverVersion, setCoverVersion] = useState(0);
   const [coverBusy, setCoverBusy] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
+
+  async function deleteProject() {
+    const count = project.photoCount;
+    const warning =
+      count > 0
+        ? `Supprimer definitivement le projet "${project.name}" et ${count} photo${count > 1 ? "s/videos" : "/video"} associee${count > 1 ? "s" : ""} ? Cette action est irreversible.`
+        : `Supprimer definitivement le projet "${project.name}" ? Cette action est irreversible.`;
+    if (!confirm(warning)) return;
+
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/projects/${project.id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("delete failed");
+      router.push("/projects");
+      router.refresh();
+    } catch {
+      setError("Impossible de supprimer le projet.");
+      setDeleting(false);
+    }
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -201,6 +224,22 @@ export function EditProjectForm({ project }: { project: Project }) {
           className="rounded-md border border-slate-300 px-4 py-2 text-slate-700 hover:bg-slate-50"
         >
           Annuler
+        </button>
+      </div>
+
+      <div className="mt-2 border-t border-red-100 pt-4">
+        <h3 className="mb-1 text-sm font-semibold text-red-700">Zone de suppression</h3>
+        <p className="mb-2 text-xs text-slate-500">
+          Supprime definitivement ce projet ainsi que toutes ses photos et videos.
+        </p>
+        <button
+          type="button"
+          onClick={deleteProject}
+          disabled={deleting}
+          className="flex items-center gap-1 rounded-md border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-60"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          {deleting ? "Suppression..." : "Supprimer le projet"}
         </button>
       </div>
     </form>

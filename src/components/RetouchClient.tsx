@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import Cropper, { type Area } from "react-easy-crop";
+import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
 import { compassLabel, parseCoordsInput } from "@/lib/geo";
 import { ProjectPicker } from "@/components/ProjectPicker";
 import {
@@ -14,6 +15,7 @@ import {
   FolderKanban,
   ImageUp,
   Loader2,
+  Maximize,
   MapPinned,
   RotateCcw,
   RotateCw,
@@ -21,6 +23,7 @@ import {
   Trash2,
   Undo2,
   ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 
 const PositionMap = dynamic(() => import("@/components/PositionMap"), {
@@ -390,13 +393,59 @@ export function RetouchClient({ photo, navigation }: { photo: PhotoData; navigat
           <video key={photo.id} src={stampedUrl} controls className="max-h-[45vh] w-full" />
         </div>
       ) : !editingCrop ? (
-        <div className="flex max-h-[45vh] items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-black">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={stampedUrl}
-            alt={photo.address || photo.projectName}
-            className="max-h-[45vh] w-full object-contain"
-          />
+        <div className="relative h-[45vh] overflow-hidden rounded-xl border border-slate-200 bg-black">
+          <TransformWrapper
+            key={`${photo.id}-${version}`}
+            initialScale={1}
+            minScale={1}
+            maxScale={5}
+            centerOnInit
+            doubleClick={{ mode: "toggle", step: 3 }}
+            wheel={{ step: 0.4 }}
+            pinch={{ step: 5 }}
+          >
+            {({ zoomIn, zoomOut, resetTransform }) => (
+              <>
+                <TransformComponent
+                  wrapperStyle={{ width: "100%", height: "100%" }}
+                  contentStyle={{ width: "100%", height: "100%", justifyContent: "center", alignItems: "center" }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={stampedUrl}
+                    alt={photo.address || photo.projectName}
+                    className="h-full w-full object-contain"
+                  />
+                </TransformComponent>
+                <div className="absolute bottom-3 right-3 z-10 flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => zoomOut()}
+                    className="rounded-full bg-black/60 p-2 text-white hover:bg-black/80"
+                    aria-label="Zoom out"
+                  >
+                    <ZoomOut className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => zoomIn()}
+                    className="rounded-full bg-black/60 p-2 text-white hover:bg-black/80"
+                    aria-label="Zoom in"
+                  >
+                    <ZoomIn className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => resetTransform()}
+                    className="rounded-full bg-black/60 p-2 text-white hover:bg-black/80"
+                    aria-label="Reset zoom"
+                  >
+                    <Maximize className="h-4 w-4" />
+                  </button>
+                </div>
+              </>
+            )}
+          </TransformWrapper>
         </div>
       ) : (
         <div className="space-y-3">

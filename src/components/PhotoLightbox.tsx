@@ -2,7 +2,18 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, ExternalLink, MapPinned, Trash2, X } from "lucide-react";
+import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
+  Maximize,
+  MapPinned,
+  Trash2,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 import { compassLabel } from "@/lib/geo";
 
 export type LightboxPhoto = {
@@ -112,13 +123,59 @@ export function PhotoLightbox({
             className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
           />
         ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={`/api/files/${current.stampedPath}`}
-            alt={current.address ?? current.projectName}
-            onClick={(e) => e.stopPropagation()}
-            className="max-h-full max-w-full rounded-lg object-contain shadow-2xl"
-          />
+          <TransformWrapper
+            key={current.id}
+            initialScale={1}
+            minScale={1}
+            maxScale={5}
+            centerOnInit
+            doubleClick={{ mode: "toggle", step: 3 }}
+            wheel={{ step: 0.4 }}
+            pinch={{ step: 5 }}
+          >
+            {({ zoomIn, zoomOut, resetTransform }) => (
+              <>
+                <TransformComponent
+                  wrapperStyle={{ width: "100%", height: "100%" }}
+                  contentStyle={{ width: "100%", height: "100%", justifyContent: "center", alignItems: "center" }}
+                  wrapperProps={{ onClick: (e) => e.stopPropagation() }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`/api/files/${current.stampedPath}`}
+                    alt={current.address ?? current.projectName}
+                    className="h-full w-full rounded-lg object-contain shadow-2xl"
+                  />
+                </TransformComponent>
+                <div
+                  className="absolute bottom-3 right-3 z-10 flex gap-1"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    onClick={() => zoomOut()}
+                    className="rounded-full bg-black/60 p-2 text-white hover:bg-black/80"
+                    aria-label="Zoom out"
+                  >
+                    <ZoomOut className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => zoomIn()}
+                    className="rounded-full bg-black/60 p-2 text-white hover:bg-black/80"
+                    aria-label="Zoom in"
+                  >
+                    <ZoomIn className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => resetTransform()}
+                    className="rounded-full bg-black/60 p-2 text-white hover:bg-black/80"
+                    aria-label="Reset zoom"
+                  >
+                    <Maximize className="h-4 w-4" />
+                  </button>
+                </div>
+              </>
+            )}
+          </TransformWrapper>
         )}
 
         {count > 1 && (

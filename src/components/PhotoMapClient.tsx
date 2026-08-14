@@ -4,11 +4,11 @@ import "leaflet/dist/leaflet.css";
 import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import { LayersControl, MapContainer, Marker, TileLayer, ZoomControl, useMap } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
-import { Check, Loader2, MapPin, X } from "lucide-react";
+import { Check, Loader2, LocateFixed, MapPin, X } from "lucide-react";
 import { PhotoLightbox, type LightboxPhoto } from "@/components/PhotoLightbox";
 import { MapSearchBar } from "@/components/MapSearchBar";
 import { BulkEditBar } from "@/components/BulkEditBar";
@@ -172,6 +172,29 @@ function toLightboxPhotos(members: MapPhoto[]): LightboxPhoto[] {
   }));
 }
 
+/** Repere "ma position" (suivi GPS temps reel) : point bleu pulsant, avec un
+ * petit cap directionnel si le navigateur fournit un heading (deplacement). */
+function userLocationIcon(heading: number | null) {
+  const arrow =
+    heading !== null
+      ? `<div style="position:absolute;left:50%;top:50%;width:0;height:0;transform:translate(-50%,-100%) rotate(${heading}deg);transform-origin:50% 100%;">
+          <div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:15px solid #006f9c;margin-top:-29px;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.5));"></div>
+        </div>`
+      : "";
+  return L.divIcon({
+    className: "",
+    html: `
+      <div style="position:relative;width:26px;height:26px;">
+        ${arrow}
+        <div style="position:absolute;inset:0;border-radius:50%;background:rgba(0,111,156,0.35);animation:lakymaps-pulse 1.6s ease-out infinite;"></div>
+        <div style="position:absolute;top:6px;left:6px;width:14px;height:14px;border-radius:50%;background:#006f9c;border:3px solid #ffffff;box-shadow:0 1px 6px rgba(0,0,0,0.5);"></div>
+      </div>
+    `,
+    iconSize: [26, 26],
+    iconAnchor: [13, 13],
+  });
+}
+
 const repositionIcon = L.divIcon({
   className: "",
   html: `
@@ -254,6 +277,67 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkError, setBulkError] = useState<string | null>(null);
+  const [tracking, setTracking] = useState(false);
+  const [userPosition, setUserPosition] = useState<{
+    latitude: number;
+    longitude: number;
+    heading: number | null;
+  } | null>(null);
+  const [trackError, setTrackError] = useState<string | null>(null);
+  const watchIdRef = useRef<number | null>(null);
+  const hasCenteredRef = useRef(false);
+
+  function stopTracking() {
+    if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+    watchIdRef.current = null;
+    setTracking(false);
+    setUserPosition(null);
+  }
+
+  function toggleTracking() {
+    if (tracking) {
+      stopTracking();
+      return;
+    }
+    if (!("geolocation" in navigator)) {
+      setTrackError("Geolocation is not available on this device.");
+      return;
+    }
+    setTrackError(null);
+    hasCenteredRef.current = false;
+    setTracking(true);
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (position) => {
+        const { latitude, longitude, heading } = position.coords;
+        const cleanHeading = typeof heading === "number" && Number.isFinite(heading) ? heading : null;
+        setUserPosition({ latitude, longitude, heading: cleanHeading });
+        setTrackError(null);
+        if (!hasCenteredRef.current) {
+          setFlyTarget({ kind: "point", center: [latitude, longitude], zoom: 17 });
+          hasCenteredRef.current = true;
+        }
+      },
+      (err) => {
+        // Permission refusee : plus aucune position ne viendra, on arrete.
+        // Sinon (signal GPS temporairement indisponible, timeout...) : le
+        // navigateur continue d'essayer tout seul, on garde le suivi actif.
+        if (err.code === err.PERMISSION_DENIED) {
+          setTrackError("Location permission denied.");
+          stopTracking();
+        } else {
+          setTrackError("Waiting for a GPS signal...");
+        }
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },
+    );
+  }
+
+  useEffect(() => {
+    return () => {
+      if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadPhotos = () => {
     fetch("/api/photos/map")
@@ -451,23 +535,26 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
     );
   }
 
-  if (photos.length === 0) {
-    return (
-      <div className="flex h-[70vh] flex-col items-center justify-center gap-2 text-center text-slate-500">
-        <MapPin className="h-10 w-10 text-slate-300" />
-        No geotagged media yet. Take or import photos/videos from a project to
-        see them appear here.
-      </div>
-    );
-  }
-
+  const hasNoMedia = photos.length === 0;
+  // Vue par defaut (Paris) tant qu'aucun media geolocalise n'existe : la
+  // carte reste utilisable (recherche d'adresse, localisation en temps reel)
+  // meme sans photo.
   const center: [number, number] = [
-    mapPoints[0]?.latitude ?? photos[0].latitude,
-    mapPoints[0]?.longitude ?? photos[0].longitude,
+    mapPoints[0]?.latitude ?? photos[0]?.latitude ?? 48.8566,
+    mapPoints[0]?.longitude ?? photos[0]?.longitude ?? 2.3522,
   ];
 
   return (
     <div className="relative h-full min-h-[70vh] w-full">
+      {hasNoMedia && (
+        <div className="pointer-events-none absolute inset-x-0 top-20 z-[1000] flex justify-center px-4">
+          <div className="flex items-center gap-2 rounded-lg bg-white/95 px-4 py-2 text-center text-sm text-slate-500 shadow-md backdrop-blur">
+            <MapPin className="h-4 w-4 shrink-0 text-slate-300" />
+            No geotagged media yet. Take or import photos/videos from a project to see them appear here.
+          </div>
+        </div>
+      )}
+
       <div className="absolute left-3 top-3 z-[1000] flex flex-wrap items-start gap-3">
         <MapSearchBar
           projects={projectOptions}
@@ -617,8 +704,37 @@ export function PhotoMapClient({ initialProjectId }: { initialProjectId?: string
           />
         )}
 
+        {tracking && userPosition && (
+          <Marker
+            position={[userPosition.latitude, userPosition.longitude]}
+            icon={userLocationIcon(userPosition.heading)}
+            interactive={false}
+            zIndexOffset={1000}
+          />
+        )}
+
         <MapController target={flyTarget} />
       </MapContainer>
+
+      <button
+        type="button"
+        onClick={toggleTracking}
+        title={tracking ? "Stop tracking my location" : "Show my location"}
+        aria-label={tracking ? "Stop tracking my location" : "Show my location"}
+        className={`absolute bottom-24 right-3 z-[1000] flex h-10 w-10 items-center justify-center rounded-full shadow-md transition ${
+          tracking
+            ? "bg-brand-600 text-white hover:bg-brand-700"
+            : "bg-white text-slate-700 hover:bg-slate-50"
+        }`}
+      >
+        <LocateFixed className="h-5 w-5" />
+      </button>
+
+      {trackError && (
+        <div className="absolute bottom-24 right-16 z-[1000] max-w-[220px] rounded-md bg-red-600 px-3 py-2 text-xs text-white shadow-md">
+          {trackError}
+        </div>
+      )}
 
       {reposition && (
         <div className="absolute inset-x-0 bottom-4 z-[1000] mx-auto flex w-fit max-w-[92%] flex-col items-center gap-2 rounded-lg bg-white/95 p-3 text-center shadow-md backdrop-blur">

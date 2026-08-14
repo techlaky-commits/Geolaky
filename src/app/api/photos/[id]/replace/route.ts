@@ -3,8 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { getOwnedPhoto } from "@/lib/authz";
 import { overwriteProjectFile } from "@/lib/storage";
+import { reverseGeocode } from "@/lib/geocode";
 import { normalizeImage, renderStampedImage } from "@/lib/stamp";
-import { compressVideo, getVideoDurationSeconds } from "@/lib/video";
+import { compressVideo, getVideoDurationSeconds, getVideoLocationMetadata } from "@/lib/video";
 
 export const runtime = "nodejs";
 
@@ -35,11 +36,33 @@ export async function POST(request: Request, { params }: { params: { id: string 
   }
 
   let durationSeconds = photo.durationSeconds;
+  let latitude = photo.latitude;
+  let longitude = photo.longitude;
+  let direction = photo.direction;
+  let address = photo.address;
+  let country = photo.country;
 
   if (isVideo) {
     const rawBuffer = Buffer.from(await file.arrayBuffer());
-    durationSeconds = await getVideoDurationSeconds(rawBuffer);
-    const compressed = await compressVideo(rawBuffer);
+    const [duration, embeddedLocation, compressed] = await Promise.all([
+      getVideoDurationSeconds(rawBuffer),
+      getVideoLocationMetadata(rawBuffer),
+      compressVideo(rawBuffer),
+    ]);
+    durationSeconds = duration;
+    // La position/le cap existants (definis manuellement ou lors de l'envoi
+    // initial) priment ; les metadonnees de la nouvelle video ne comblent
+    // que ce qui manque encore.
+    if (latitude === null && longitude === null && embeddedLocation) {
+      latitude = embeddedLocation.latitude;
+      longitude = embeddedLocation.longitude;
+      const geocoded = await reverseGeocode(latitude, longitude);
+      address = geocoded?.address ?? null;
+      country = geocoded?.country ?? null;
+    }
+    if (direction === null && embeddedLocation?.direction != null) {
+      direction = embeddedLocation.direction;
+    }
     await overwriteProjectFile(photo.originalPath, compressed);
     // stampedPath pointe vers le meme fichier pour une video (voir route d'upload).
   } else {
@@ -63,7 +86,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
   const updated = await prisma.photo.update({
     where: { id: photo.id },
-    data: { cropData: null, durationSeconds },
+    data: { cropData: null, durationSeconds, latitude, longitude, direction, address, country },
   });
 
   return NextResponse.json({ photo: updated });

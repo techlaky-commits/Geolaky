@@ -6,7 +6,7 @@ import { getOwnedProject } from "@/lib/authz";
 import { saveProjectFile } from "@/lib/storage";
 import { reverseGeocode } from "@/lib/geocode";
 import { normalizeImage, renderStampedImage } from "@/lib/stamp";
-import { compressVideo, getVideoDurationSeconds } from "@/lib/video";
+import { compressVideo, getVideoDurationSeconds, getVideoLocationMetadata } from "@/lib/video";
 
 export const runtime = "nodejs";
 
@@ -52,7 +52,31 @@ export async function POST(request: Request, { params }: { params: { id: string 
   if (!parsed.success) {
     return NextResponse.json({ error: "Metadonnees invalides" }, { status: 400 });
   }
-  const { latitude, longitude, accuracy, capturedAt, note, groupId, direction } = parsed.data;
+  let { latitude, longitude, direction } = parsed.data;
+  const { accuracy, capturedAt, note, groupId } = parsed.data;
+  const capturedDate = capturedAt ?? new Date();
+
+  let originalPath: string;
+  let stampedPath: string;
+  let durationSeconds: number | null = null;
+  let compressedVideo: Buffer | null = null;
+
+  if (isVideo) {
+    const rawBuffer = Buffer.from(await file.arrayBuffer());
+    const [duration, embeddedLocation, compressed] = await Promise.all([
+      getVideoDurationSeconds(rawBuffer),
+      getVideoLocationMetadata(rawBuffer),
+      compressVideo(rawBuffer),
+    ]);
+    durationSeconds = duration;
+    compressedVideo = compressed;
+    // La position du navigateur (watchPosition) et l'EXIF client priment ;
+    // les metadonnees embarquees dans la video ne servent qu'en secours,
+    // et pour le cap (rarement fourni autrement pour une video).
+    latitude = latitude ?? embeddedLocation?.latitude;
+    longitude = longitude ?? embeddedLocation?.longitude;
+    direction = direction ?? embeddedLocation?.direction ?? undefined;
+  }
 
   const geocoded =
     latitude !== undefined && longitude !== undefined
@@ -60,19 +84,11 @@ export async function POST(request: Request, { params }: { params: { id: string 
       : null;
   const address = geocoded?.address ?? null;
   const country = geocoded?.country ?? null;
-  const capturedDate = capturedAt ?? new Date();
-
-  let originalPath: string;
-  let stampedPath: string;
-  let durationSeconds: number | null = null;
 
   if (isVideo) {
-    const rawBuffer = Buffer.from(await file.arrayBuffer());
-    durationSeconds = await getVideoDurationSeconds(rawBuffer);
-    const compressed = await compressVideo(rawBuffer);
     // Pas de tampon geoloc incruste pour une video (pas de retouche image
     // possible) : originalPath et stampedPath pointent vers le meme fichier.
-    originalPath = await saveProjectFile(project.id, compressed, "original", "mp4");
+    originalPath = await saveProjectFile(project.id, compressedVideo as Buffer, "original", "mp4");
     stampedPath = originalPath;
   } else {
     const originalBuffer = await normalizeImage(Buffer.from(await file.arrayBuffer()));

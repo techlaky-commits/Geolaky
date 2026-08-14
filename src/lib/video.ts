@@ -70,3 +70,51 @@ export async function getVideoDurationSeconds(buffer: Buffer): Promise<number | 
     }
   });
 }
+
+export type VideoLocation = { latitude: number; longitude: number; direction: number | null };
+
+// Cle "location" au format ISO 6709 ecrite par la plupart des apps camera
+// (iOS : com.apple.quicktime.location.ISO6709, Android : location), ex :
+// "+48.8566+002.3522+035.000/". Le cap de prise de vue, lui, n'est presque
+// jamais embarque dans un conteneur video (contrairement a l'EXIF photo) -
+// on tente quand meme quelques cles connues, au mieux.
+const LOCATION_TAG_KEYS = ["com.apple.quicktime.location.ISO6709", "location", "location-eng"];
+const DIRECTION_TAG_KEYS = ["com.apple.quicktime.direction", "direction", "GPSImgDirection"];
+const ISO6709_PATTERN = /^([+-]\d+(?:\.\d+)?)([+-]\d+(?:\.\d+)?)/;
+
+/** Extrait la position GPS (et le cap, si present) des metadonnees d'une
+ * video, ou null si aucune metadonnee de localisation n'est embarquee. */
+export async function getVideoLocationMetadata(buffer: Buffer): Promise<VideoLocation | null> {
+  return withTempDir(async (dir) => {
+    const inputPath = path.join(dir, "input.mp4");
+    await writeFile(inputPath, buffer);
+    try {
+      const { stdout } = await execFileAsync(ffprobePath.path, [
+        "-v", "error",
+        "-print_format", "json",
+        "-show_entries", "format_tags",
+        inputPath,
+      ]);
+      const tags: Record<string, string> = JSON.parse(stdout)?.format?.tags ?? {};
+      const tagEntries = Object.fromEntries(
+        Object.entries(tags).map(([key, value]) => [key.toLowerCase(), value]),
+      );
+
+      const locationValue = LOCATION_TAG_KEYS.map((key) => tagEntries[key.toLowerCase()]).find(Boolean);
+      if (!locationValue) return null;
+
+      const match = ISO6709_PATTERN.exec(String(locationValue));
+      if (!match) return null;
+      const latitude = Number(match[1]);
+      const longitude = Number(match[2]);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+
+      const directionValue = DIRECTION_TAG_KEYS.map((key) => tagEntries[key.toLowerCase()]).find(Boolean);
+      const direction = directionValue !== undefined ? Number(directionValue) : NaN;
+
+      return { latitude, longitude, direction: Number.isFinite(direction) ? direction : null };
+    } catch {
+      return null;
+    }
+  });
+}
